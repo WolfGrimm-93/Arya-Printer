@@ -1,0 +1,3 @@
+"""
+Arya ESCPOS Test Suite
+"""

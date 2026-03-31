@@ -1,0 +1,49 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+websockets==12.0
+python-multipart==0.0.6
+
+# Device Detection
+pyusb==1.2.1
+pyserial==3.5
+pywin32==306  # Windows printer support
+# ===== BLUETOOTH (PENDIENTE DE IMPLEMENTACIÓN) =====
+# pybluez==0.23  # ❌ NO compatible con Python 3.12+
+#
+# ALTERNATIVAS:
+# bleak==0.21.1              # ✅ BLE moderno, Python 3.8+, multiplataforma
+# bleak-serial==0.3.0        # ✅ Serial sobre BLE
+# pybluez2==0.46             # ⚠️  Fork, puede fallar en Windows
+#
+# RECOMENDACIÓN: pip install bleak
+zeroconf==0.131.0
+
+# Data Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# PDF Printing
+PyMuPDF==1.23.8  # Native PDF rendering and printing
+Pillow==10.2.0   # Image handling for PDF printing
+
+# Document Conversion
+docx2pdf==0.1.8  # Word to PDF conversion
+pypandoc==1.16.2 # Universal document converter
+
+# Logging
+loguru==0.7.2
+
+# Image Processing (for ESC/POS printing)
+qrcode==7.4.2
+
+# Utilities
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Development
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.26.0
+black==24.1.1
+flake8==7.0.0

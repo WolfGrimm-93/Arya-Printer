@@ -1,0 +1,6 @@
+"""
+Arya ESCPOS - ESC/POS Device Management Service
+"""
+
+__version__ = "1.0.0"
+__author__ = "Arya ESCPOS Team"

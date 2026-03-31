@@ -1,0 +1,55 @@
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Build artifacts (arya_escpos)
+arya_escpos/build/
+arya_escpos/dist/
+arya_escpos/installer_output/
+arya_escpos/venv/
+arya_escpos/nssm_temp/
+arya_escpos/AryaESCPOS.spec
+arya_escpos/check_queue.py
+arya_escpos/Canon_GX6000_series.pdf
+arya_escpos/config/local_settings.yaml

@@ -1,0 +1,41 @@
+# Arya ESCPOS Service Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 58181
+  port_secure: 58182
+  reload: false
+  workers: 1
+
+
+logging:
+  level: "INFO"
+  format: "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+  log_dir: "logs"           # Directory for daily log folders (logs/YYYY-MM-DD/)
+  retention_days: 15        # Delete logs older than 15 days
+
+discovery:
+  auto_scan_interval: 30  # seconds, 0 to disable
+  usb_enabled: true        # ✅ USB printers (requires libusb on Windows)
+  network_enabled: true    # ✅ Network printers (TCP/IP port 9100)
+  serial_enabled: true     # ✅ Serial/COM printers (RS-232)
+  bluetooth_enabled: true  # ✅ Bluetooth Classic/RFCOMM (PyBluez)
+  bluetooth_scan_duration: 8  # Bluetooth scan duration in seconds
+
+devices:
+  auto_reconnect: true
+  connection_timeout: 5  # seconds
+  retry_attempts: 3
+
+printers:
+  default_encoding: "utf-8"
+  paper_width: 80  # mm
+  
+network_scan:
+  enabled: true
+  subnets:
+    - "192.168.1.0/24"
+  ports:
+    - 9100
+    - 9101
+  timeout: 2
