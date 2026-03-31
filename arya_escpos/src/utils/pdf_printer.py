@@ -20,7 +20,7 @@ except ImportError:
     PDF_NATIVE_AVAILABLE = False
 
 
-def get_job_id_from_queue(printer_name: str, doc_name: str, timeout_sec: int = 3) -> int | None:
+def get_job_id_from_queue(printer_name: str, doc_name: str, timeout_sec: int = 5) -> int | None:
     """Get the Job ID of a recently submitted document by searching the queue.
 
     Looks for a document with matching name in the printer queue.
@@ -28,28 +28,57 @@ def get_job_id_from_queue(printer_name: str, doc_name: str, timeout_sec: int = 3
     """
     import time
 
+    printer_handle = None
     try:
         printer_handle = win32print.OpenPrinter(printer_name)
         start_time = time.time()
+        last_error = None
 
         while time.time() - start_time < timeout_sec:
-            jobs = win32print.EnumJobs(printer_handle, 0, -1)
+            try:
+                jobs = win32print.EnumJobs(printer_handle, 0, -1)
 
-            for job in jobs:
-                if doc_name in job.get("pDocument", ""):
-                    return job.get("JobId")
+                if not jobs:
+                    logger.debug(f"No jobs in queue yet for {printer_name}")
+                    time.sleep(0.2)
+                    continue
 
-            time.sleep(0.1)
+                # Look for job with matching document name
+                for job in jobs:
+                    job_doc = job.get("pDocument", "").lower()
+                    doc_match = doc_name.lower()
 
+                    logger.debug(f"Found job: {job_doc} (looking for {doc_match})")
+
+                    # Match by filename or partial match
+                    if doc_match in job_doc or Path(doc_match).stem in job_doc:
+                        job_id = job.get("JobId")
+                        logger.info(f"Captured job ID {job_id}: {job_doc}")
+                        return job_id
+
+            except Exception as e:
+                last_error = e
+                logger.debug(f"EnumJobs error (attempt): {e}")
+                time.sleep(0.2)
+                continue
+
+            time.sleep(0.2)
+
+        if last_error:
+            logger.warning(f"Could not retrieve job ID after {timeout_sec}s: {last_error}")
+        else:
+            logger.warning(f"Job ID not found in queue after {timeout_sec}s for {doc_name}")
         return None
+
     except Exception as e:
-        logger.warning(f"Could not retrieve job ID: {e}")
+        logger.error(f"Failed to open printer {printer_name}: {e}")
         return None
     finally:
-        try:
-            win32print.ClosePrinter(printer_handle)
-        except Exception:
-            pass
+        if printer_handle:
+            try:
+                win32print.ClosePrinter(printer_handle)
+            except Exception:
+                pass
 
 
 def print_pdf_native(
