@@ -47,11 +47,16 @@ def get_job_id_from_queue(printer_name: str, doc_name: str, timeout_sec: int = 5
                 for job in jobs:
                     job_doc = job.get("pDocument", "").lower()
                     doc_match = doc_name.lower()
+                    doc_basename = Path(doc_name).name.lower()
 
-                    logger.debug(f"Found job: {job_doc} (looking for {doc_match})")
+                    logger.debug(f"Queue job: {job_doc} vs search: {doc_match}")
 
-                    # Match by filename or partial match
-                    if doc_match in job_doc or Path(doc_match).stem in job_doc:
+                    # Match by exact filename, basename, or stem
+                    if (doc_match == job_doc or
+                        doc_basename == job_doc or
+                        doc_match in job_doc or
+                        doc_basename in job_doc or
+                        Path(doc_match).stem.lower() in job_doc):
                         job_id = job.get("JobId")
                         logger.info(f"Captured job ID {job_id}: {job_doc}")
                         return job_id

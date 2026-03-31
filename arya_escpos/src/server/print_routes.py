@@ -108,7 +108,7 @@ async def print_document(
             raise HTTPException(status_code=400, detail=f"Unsupported document type: {doc_type}")
 
         job_id = await asyncio.to_thread(
-            _print_pdf_to_windows, pdf_path, printer_name, orientation, copies, color, duplex, file.filename
+            _print_pdf_to_windows, pdf_path, printer_name, orientation, copies, color, duplex, os.path.basename(pdf_path)
         )
 
     finally:
