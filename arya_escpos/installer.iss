@@ -2,7 +2,7 @@
 ; Instalador profesional con servicio de Windows automático
 
 #define MyAppName "Arya ESCPOS Service"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "Arya Development"
 #define MyAppURL "https://github.com/tu-usuario/arya-escpos"
 #define MyAppExeName "AryaESCPOS.exe"

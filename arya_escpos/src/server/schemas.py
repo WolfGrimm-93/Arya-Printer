@@ -1,6 +1,6 @@
 """Pydantic schemas for API request/response validation."""
 from pydantic import BaseModel, model_validator
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 
 class DeviceInfo(BaseModel):
@@ -78,12 +78,21 @@ class ReportPrintRequest(BaseModel):
     content: str
 
 
+class BarcodeItem(BaseModel):
+    """Barcode to print as ESC/P raster graphics."""
+    data: str
+    type: Literal["code39", "code128", "ean13", "ean8", "upca", "upc"] = "code39"
+    width_dots: int = 300
+    height_dots: int = 48
+
+
 class MatrixPrintRequest(BaseModel):
     """Print plain text to a dot matrix (ESC/P) printer.
 
     Compatible printers (ESC/P / ESC/P2):
     - Epson LX-350, LX-300+II, LX-810, LX-1170
     - Epson FX-890II, FX-2190, DFX-9000
+    - Oki Microline 320, 390, 5720
     - Cualquier matricial de 9 o 24 pines compatible con ESC/P
 
     Connection types:
@@ -96,13 +105,18 @@ class MatrixPrintRequest(BaseModel):
     encoding: str = "cp850"
     # Avance de pagina al finalizar (para papel continuo)
     form_feed: bool = True
+    # Tipografia
+    font: Literal["roman", "sans_serif"] = "roman"
+    cpi: Literal[10, 12, 15] = 10
+    # Codigos de barra (se imprimen despues del contenido de texto)
+    barcodes: List[BarcodeItem] = []
     # Windows
-    printer_name: str | None = None
+    printer_name: Optional[str] = None
     # USB (hex strings)
-    vid: str | None = None
-    pid: str | None = None
+    vid: Optional[str] = None
+    pid: Optional[str] = None
     # Serial
-    com_port: str | None = None
+    com_port: Optional[str] = None
     baud_rate: int = 9600
 
     @model_validator(mode="after")

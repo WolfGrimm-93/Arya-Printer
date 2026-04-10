@@ -36,6 +36,7 @@ loguru==0.7.2
 
 # Image Processing (for ESC/POS printing)
 qrcode==7.4.2
+python-barcode==0.15.1  # Barcode generation for matrix printers (ESC/P raster)
 
 # Utilities
 python-dotenv==1.0.0

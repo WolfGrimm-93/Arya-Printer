@@ -12,6 +12,8 @@ from utils.logger import get_logger
 from utils.document_converter import convert_to_pdf, get_document_type
 from utils.pdf_printer import print_pdf_native, get_job_id_from_queue
 from server.schemas import PrintRequest, ReportPrintRequest, MatrixPrintRequest
+from utils.print_history import record as history_record
+from utils.matrix_command_builder import MatrixCommandBuilder
 
 router = APIRouter()
 logger = get_logger()
@@ -48,6 +50,9 @@ async def print_ticket(request: PrintRequest):
     data = builder.build()
 
     await asyncio.to_thread(_send_to_device, request, data)
+
+    printer_id = request.printer_name or request.ip or request.com_port or request.address or f"usb:{request.vid}:{request.pid}"
+    history_record(printer_name=printer_id, document="ticket", protocol="escpos", bytes_sent=len(data))
 
     return {
         "success": True,
@@ -86,6 +91,8 @@ async def print_report(request: ReportPrintRequest):
     await asyncio.to_thread(
         send_raw_to_windows, request.printer_name, text_bytes, "Arya Report"
     )
+
+    history_record(printer_name=request.printer_name, document=request.title, protocol="report", bytes_sent=len(text_bytes))
 
     return {"success": True, "message": f"Report sent to {request.printer_name}"}
 
@@ -162,6 +169,8 @@ async def print_document(
         file_size_str = f"{file_size_bytes / 1024:.2f} KB"
     else:
         file_size_str = f"{file_size_bytes / (1024 * 1024):.2f} MB"
+
+    history_record(printer_name=printer_name, document=file.filename, protocol="document", bytes_sent=file_size_bytes, job_id=job_id)
 
     return {
         "success": True,
@@ -303,24 +312,55 @@ async def print_matrix(request: MatrixPrintRequest):
     No envia corte de papel ni graficos raster.
     Para tickets termicos usar /print. Para documentos PDF usar /print/document.
     """
-    ESC = b'\x1b'
-    FF = b'\x0c'
+    builder = MatrixCommandBuilder(encoding=request.encoding)
+    builder.init()
+    builder.font(request.font)
+    builder.cpi(request.cpi)
+    builder.line_spacing_sixth()
+    builder.text(request.content)
+    builder.newline(2)
 
-    data = bytearray()
-    data += ESC + b'@'   # ESC @ - Inicializar impresora
-    data += ESC + b'2'   # ESC 2 - Interlineado 1/6 pulgada
-    data += request.content.encode(request.encoding, errors='replace')
-    data += b'\n\n'
+    for bc in request.barcodes:
+        builder.barcode(
+            data=bc.data,
+            barcode_type=bc.type,
+            width_dots=bc.width_dots,
+            height_dots=bc.height_dots,
+        )
+
     if request.form_feed:
-        data += FF       # FF - Avance de pagina (eyecta hoja)
+        builder.form_feed()
 
-    await asyncio.to_thread(_send_to_matrix_device, request, bytes(data))
+    data = builder.build()
+
+    await asyncio.to_thread(_send_to_matrix_device, request, data)
+
+    printer_id = request.printer_name or request.com_port or f"usb:{request.vid}:{request.pid}"
+    history_record(printer_name=printer_id, document="matrix-ticket", protocol="escp", bytes_sent=len(data))
 
     return {
         "success": True,
         "message": f"Matrix print job sent ({request.type})",
         "bytes_sent": len(data),
     }
+
+
+@router.get("/print/history", tags=["Printing"])
+async def get_print_history(limit: int = 50, printer_name: str = None):
+    """Get recent print job history (in-memory, max 500 entries, resets on service restart).
+
+    Util para:
+    - Auditar actividad de impresion reciente
+    - Verificar trabajos completados en impresoras rapidas (matriciales, termicas)
+    - Confirmar que el job llego al servicio antes de buscar job_id en cola Windows
+
+    Args:
+        limit: Numero maximo de registros (1-500, default 50).
+        printer_name: Filtrar por nombre de impresora (opcional, case-insensitive).
+    """
+    from utils.print_history import get_history
+    jobs = get_history(limit=limit, printer_name=printer_name)
+    return {"total": len(jobs), "jobs": jobs}
 
 
 def _send_to_matrix_device(request: MatrixPrintRequest, data: bytes):
