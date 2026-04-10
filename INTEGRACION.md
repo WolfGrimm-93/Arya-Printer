@@ -684,6 +684,86 @@ console.log(config.server.port); // 58181
 
 ---
 
+## 7. Historial de trabajos impresos
+
+Consulta los ultimos trabajos enviados al servicio. Util para confirmar que una impresion llego al servicio, especialmente en impresoras matriciales o termicas que imprimen rapido y desaparecen de la cola antes de poder rastrearlas.
+
+**Nota:** El historial vive en memoria — se reinicia cuando el servicio se reinicia. Guarda hasta 500 entradas.
+
+### Endpoint
+
+```
+GET /api/v1/print/history
+```
+
+### Parametros (query string)
+
+| Parametro      | Tipo   | Default | Descripcion                              |
+|----------------|--------|---------|------------------------------------------|
+| `limit`        | int    | `50`    | Numero maximo de registros (max 500)     |
+| `printer_name` | string | -       | Filtrar por nombre de impresora          |
+
+### Ejemplo
+
+```javascript
+async function getPrintHistory(printerName = null, limit = 50) {
+  const params = new URLSearchParams({ limit });
+  if (printerName) params.set('printer_name', printerName);
+
+  const response = await fetch(
+    `http://localhost:58181/api/v1/print/history?${params}`
+  );
+  return await response.json();
+}
+
+// Ver todos los trabajos recientes
+const history = await getPrintHistory();
+
+// Filtrar por impresora matricial
+const matrixJobs = await getPrintHistory('Epson LX-350', 20);
+```
+
+### Respuesta
+
+```json
+{
+  "total": 2,
+  "jobs": [
+    {
+      "id": 1744300000123,
+      "timestamp": "2026-04-10T10:45:22",
+      "printer_name": "Epson LX-350",
+      "document": "matrix-ticket",
+      "protocol": "escp",
+      "bytes_sent": 312,
+      "job_id": null,
+      "status": "sent"
+    },
+    {
+      "id": 1744299900456,
+      "timestamp": "2026-04-10T10:43:10",
+      "printer_name": "HP LaserJet",
+      "document": "factura.pdf",
+      "protocol": "document",
+      "bytes_sent": 125432,
+      "job_id": 123,
+      "status": "sent"
+    }
+  ]
+}
+```
+
+### Protocolos (`protocol`)
+
+| Valor      | Origen                         |
+|------------|--------------------------------|
+| `escpos`   | POST /print (termicas)         |
+| `escp`     | POST /print/matrix (matriciales)|
+| `report`   | POST /print/report             |
+| `document` | POST /print/document           |
+
+---
+
 ## Implementacion recomendada
 
 ### 1. Servicio de impresion (service/printer.js o similar)
@@ -778,6 +858,14 @@ class AryaPrinterService {
     return await res.json();
   }
 
+  // Historial de trabajos impresos
+  async getHistory(limit = 50, printerName = null) {
+    const params = new URLSearchParams({ limit });
+    if (printerName) params.set('printer_name', printerName);
+    const res = await fetch(`${ARYA_PRINTER_URL}/api/v1/print/history?${params}`);
+    return await res.json();
+  }
+
   // Estado de impresora
   async getStatus(printerName) {
     const encoded = printerName.replace(/ /g, '_');
@@ -840,6 +928,7 @@ try {
 | GET    | `/api/v1/devices/{type}/{id}/status`              | Estado de impresora        | -                                   | -                    |
 | GET    | `/api/v1/devices/windows/{printer}/jobs/{job_id}` | Estado de un trabajo       | -                                   | -                    |
 | GET    | `/api/v1/config`                                  | Configuracion del servicio | -                                   | -                    |
+| GET    | `/api/v1/print/history`                           | Historial de trabajos      | -                                   | -                    |
 | POST   | `/api/v1/print`                                   | Ticket ESC/POS             | Epson TM, CUSTOM, Star, Bixolon     | application/json     |
 | POST   | `/api/v1/print/matrix`                            | Texto plano ESC/P          | Epson LX-350/FX-890, Oki Microline  | application/json     |
 | POST   | `/api/v1/print/report`                            | Reporte de texto           | Cualquier impresora Windows         | application/json     |

@@ -127,6 +127,7 @@ Base URL: `http://localhost:58181/api/v1`
 | POST   | `/api/v1/print/matrix`  | Texto plano ESC/P (matriciales)          | Epson LX-350, FX-890, Oki Microline     |
 | POST   | `/api/v1/print/report`  | Reporte texto plano via Windows          | Cualquier impresora con driver Windows  |
 | POST   | `/api/v1/print/document`| Documento PDF/DOCX/TXT via Windows       | Cualquier impresora con driver Windows  |
+| GET    | `/api/v1/print/history` | Historial de trabajos enviados           | -                                       |
 
 ### Configuracion
 
@@ -352,6 +353,53 @@ El servicio convierte automaticamente DOCX y otros formatos a PDF antes de impri
   "track_url": "/api/v1/devices/windows/HP_LaserJet/jobs/123"
 }
 ```
+
+### Historial de Impresion
+
+**GET** `/api/v1/print/history`
+
+Retorna los ultimos trabajos enviados al servicio (max 500, en memoria, se reinicia con el servicio). Util para verificar trabajos de impresoras rapidas (matriciales, termicas) que completan antes de aparecer en la cola Windows.
+
+```bash
+# Ultimos 50 trabajos
+curl http://localhost:58181/api/v1/print/history
+
+# Filtrar por impresora
+curl "http://localhost:58181/api/v1/print/history?printer_name=Epson+LX-350&limit=20"
+```
+
+**Respuesta:**
+```json
+{
+  "total": 2,
+  "jobs": [
+    {
+      "id": 1744300000123,
+      "timestamp": "2026-04-10T10:45:22",
+      "printer_name": "Epson LX-350",
+      "document": "matrix-ticket",
+      "protocol": "escp",
+      "bytes_sent": 312,
+      "job_id": null,
+      "status": "sent"
+    },
+    {
+      "id": 1744299900456,
+      "timestamp": "2026-04-10T10:43:10",
+      "printer_name": "HP LaserJet",
+      "document": "factura.pdf",
+      "protocol": "document",
+      "bytes_sent": 125432,
+      "job_id": 123,
+      "status": "sent"
+    }
+  ]
+}
+```
+
+Protocolos posibles: `escpos` | `escp` | `document` | `report`
+
+---
 
 ### Rastreo de Trabajos de Impresion
 
