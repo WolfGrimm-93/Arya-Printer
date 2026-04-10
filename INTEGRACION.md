@@ -131,9 +131,11 @@ const windowsPrinters = printers.filter(p => p.type === 'windows');
 
 ---
 
-## 3. Imprimir ticket ESC/POS
+## 3. Imprimir ticket ESC/POS (impresoras termicas)
 
 Envia texto plano a una impresora termica. El servicio lo envuelve en comandos ESC/POS (init + encode + cut).
+
+**Impresoras compatibles:** Epson TM-T20, TM-T88, TM-T70, CUSTOM P3L/Q3X, Star TSP100/TSP650, Bixolon SRP-350, Citizen CT-S310II. Cualquier termica ESC/POS de 58mm u 80mm.
 
 ### Endpoint
 
@@ -272,9 +274,112 @@ const result = await fetch('http://localhost:58181/api/v1/print', {
 
 ---
 
-## 4. Imprimir reporte de texto
+---
+
+## 4. Imprimir en impresora matricial (ESC/P)
+
+Envia texto plano a una impresora matricial de impacto usando el protocolo ESC/P.
+
+**Impresoras compatibles:** Epson LX-350, LX-300+II, LX-810, FX-890II, DFX-9000. Oki Microline 320/390. Cualquier matricial de 9 o 24 pines con protocolo ESC/P.
+
+### Endpoint
+
+```
+POST /api/v1/print/matrix
+Content-Type: application/json
+```
+
+### Para que sirve
+
+- Imprimir formularios continuos (facturas, comprobantes)
+- Imprimir en papel multipartes (original + copias)
+- Sistemas de facturacion con impresoras antiguas industriales
+- Bancos y entidades con equipos matriciales
+
+### Body (JSON)
+
+| Campo          | Tipo   | Requerido | Default  | Descripcion                                |
+|----------------|--------|-----------|----------|--------------------------------------------|
+| `type`         | string | Si        | -        | `windows`, `usb`, o `serial`               |
+| `content`      | string | Si        | -        | Texto a imprimir                           |
+| `encoding`     | string | No        | `cp850`  | Codificacion del texto                     |
+| `form_feed`    | bool   | No        | `true`   | Avanzar pagina al terminar                 |
+| `printer_name` | string | Si*       | -        | Nombre Windows (si type=windows)           |
+| `vid`          | string | Si*       | -        | Vendor ID hex (si type=usb)                |
+| `pid`          | string | Si*       | -        | Product ID hex (si type=usb)               |
+| `com_port`     | string | Si*       | -        | Puerto COM (si type=serial)                |
+| `baud_rate`    | int    | No        | `9600`   | Baudrate (si type=serial)                  |
+
+### Ejemplo - Via Windows driver (recomendado)
+
+```javascript
+async function printMatrixTicket(printerName, content) {
+  const response = await fetch('http://localhost:58181/api/v1/print/matrix', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'windows',
+      printer_name: printerName,
+      content: content
+    })
+  });
+  return await response.json();
+}
+
+// Uso - Factura en matricial
+const factura = [
+  'EMPRESA S.A.',
+  'RUC: 20123456789',
+  '================================',
+  'FACTURA #001-0001234',
+  'Fecha: 2026-04-10',
+  '--------------------------------',
+  'Producto         Cant   Precio',
+  '--------------------------------',
+  'Articulo A          2   $50.00',
+  'Articulo B          1   $30.00',
+  '--------------------------------',
+  'TOTAL:                  $130.00',
+  '================================',
+].join('\n');
+
+const result = await printMatrixTicket('Epson LX-350', factura);
+// { success: true, message: "Matrix print job sent (windows)", bytes_sent: 312 }
+```
+
+### Ejemplo - Via serial RS-232
+
+```javascript
+const result = await fetch('http://localhost:58181/api/v1/print/matrix', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    type: 'serial',
+    com_port: 'COM1',
+    baud_rate: 9600,
+    content: 'FACTURA #001\nTotal: $100.00',
+    form_feed: true
+  })
+});
+```
+
+### Respuesta exitosa
+
+```json
+{
+  "success": true,
+  "message": "Matrix print job sent (windows)",
+  "bytes_sent": 312
+}
+```
+
+---
+
+## 5. Imprimir reporte de texto
 
 Envia texto formateado (UTF-8) directo al spooler de Windows. No usa comandos ESC/POS. Ideal para reportes en impresoras normales.
+
+**Impresoras compatibles:** Cualquier impresora con driver de Windows (laser, tinta, matriciales).
 
 ### Endpoint
 
@@ -607,7 +712,7 @@ class AryaPrinterService {
     return data.devices;
   }
 
-  // Imprimir ticket ESC/POS
+  // Imprimir ticket ESC/POS (termicas: Epson TM, CUSTOM, Star, Bixolon)
   async printTicket(printerName, content) {
     const res = await fetch(`${ARYA_PRINTER_URL}/api/v1/print`, {
       method: 'POST',
@@ -619,6 +724,23 @@ class AryaPrinterService {
       })
     });
     if (!res.ok) throw new Error(`Print failed: ${res.status}`);
+    return await res.json();
+  }
+
+  // Imprimir en matricial ESC/P (Epson LX-350, FX-890, Oki Microline)
+  async printMatrix(printerName, content, options = {}) {
+    const res = await fetch(`${ARYA_PRINTER_URL}/api/v1/print/matrix`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'windows',
+        printer_name: printerName,
+        content: content,
+        encoding: options.encoding || 'cp850',
+        form_feed: options.form_feed !== undefined ? options.form_feed : true
+      })
+    });
+    if (!res.ok) throw new Error(`Matrix print failed: ${res.status}`);
     return await res.json();
   }
 
@@ -711,16 +833,17 @@ try {
 
 ## Resumen de endpoints
 
-| Metodo | Endpoint                                          | Uso                        | Content-Type         |
-|--------|---------------------------------------------------|----------------------------|----------------------|
-| GET    | `/health`                                         | Health check               | -                    |
-| GET    | `/api/v1/devices/scan`                            | Listar impresoras          | -                    |
-| GET    | `/api/v1/devices/{type}/{id}/status`              | Estado de impresora        | -                    |
-| GET    | `/api/v1/devices/windows/{printer}/jobs/{job_id}` | Estado de un trabajo       | -                    |
-| GET    | `/api/v1/config`                                  | Configuracion del servicio | -                    |
-| POST   | `/api/v1/print`                                   | Ticket ESC/POS             | application/json     |
-| POST   | `/api/v1/print/report`                            | Reporte de texto           | application/json     |
-| POST   | `/api/v1/print/document`                          | Archivo (PDF, DOCX, etc.)  | multipart/form-data  |
+| Metodo | Endpoint                                          | Uso                        | Impresoras                          | Content-Type         |
+|--------|---------------------------------------------------|----------------------------|-------------------------------------|----------------------|
+| GET    | `/health`                                         | Health check               | -                                   | -                    |
+| GET    | `/api/v1/devices/scan`                            | Listar impresoras          | -                                   | -                    |
+| GET    | `/api/v1/devices/{type}/{id}/status`              | Estado de impresora        | -                                   | -                    |
+| GET    | `/api/v1/devices/windows/{printer}/jobs/{job_id}` | Estado de un trabajo       | -                                   | -                    |
+| GET    | `/api/v1/config`                                  | Configuracion del servicio | -                                   | -                    |
+| POST   | `/api/v1/print`                                   | Ticket ESC/POS             | Epson TM, CUSTOM, Star, Bixolon     | application/json     |
+| POST   | `/api/v1/print/matrix`                            | Texto plano ESC/P          | Epson LX-350/FX-890, Oki Microline  | application/json     |
+| POST   | `/api/v1/print/report`                            | Reporte de texto           | Cualquier impresora Windows         | application/json     |
+| POST   | `/api/v1/print/document`                          | Archivo (PDF, DOCX, etc.)  | Cualquier impresora Windows         | multipart/form-data  |
 
 ## Notas importantes
 

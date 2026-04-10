@@ -11,7 +11,7 @@ from core.command_builder import CommandBuilder
 from utils.logger import get_logger
 from utils.document_converter import convert_to_pdf, get_document_type
 from utils.pdf_printer import print_pdf_native, get_job_id_from_queue
-from server.schemas import PrintRequest, ReportPrintRequest
+from server.schemas import PrintRequest, ReportPrintRequest, MatrixPrintRequest
 
 router = APIRouter()
 logger = get_logger()
@@ -19,10 +19,21 @@ logger = get_logger()
 
 @router.post("/print", tags=["Printing"])
 async def print_ticket(request: PrintRequest):
-    """Print ESC/POS text to a device. Client provides connection details.
+    """Print ESC/POS text to a thermal printer. Client provides connection details.
 
-    The content is sent as plain text wrapped in basic ESC/POS commands
-    (init + text encoding + cut). The client controls the content.
+    Compatible printers (ESC/POS protocol):
+    - Epson TM-T20, TM-T88, TM-T70, TM-U220
+    - CUSTOM P3L, Q3X, VKP80II
+    - Citizen CT-S310II, CT-S4000
+    - Star Micronics TSP100, TSP650, mPOP
+    - Bixolon SRP-350, SRP-330
+    - Sewoo/Vaytech termicas
+    - Cualquier impresora termica ESC/POS de 58mm u 80mm
+
+    NO compatible con: impresoras matriciales (usar /print/matrix),
+    impresoras laser/tinta (usar /print/document o /print/report).
+
+    El content se envuelve en: ESC @ (init) + imagen cabecera (opcional) + texto + corte.
     """
     builder = CommandBuilder(encoding="cp850")
     builder.init()
@@ -47,7 +58,18 @@ async def print_ticket(request: PrintRequest):
 
 @router.post("/print/report", tags=["Printing"])
 async def print_report(request: ReportPrintRequest):
-    """Print a formatted report to a Windows printer via RAW spooler."""
+    """Print a formatted report (plain text) to a Windows printer via RAW spooler.
+
+    Compatible printers (cualquier impresora con driver de Windows):
+    - Laser: HP LaserJet, Canon LBP, Brother HL, Xerox
+    - Tinta: Canon GX6000, HP DeskJet, Epson EcoTank
+    - Matriciales con driver Windows: Epson LX-350, FX-890, Oki Microline
+    - Cualquier impresora instalada en Windows
+
+    NO requiere ESC/POS. Envia texto plano UTF-8 directo al spooler.
+    Para documentos PDF/DOCX usar /print/document.
+    Para tickets termicos usar /print.
+    """
     if not WINDOWS_PRINTER_AVAILABLE:
         raise HTTPException(status_code=500, detail="Windows printer support not available")
 
@@ -77,7 +99,18 @@ async def print_document(
     color: str = "color",
     duplex: str = "simplex",
 ):
-    """Print a document file (PDF, DOCX, TXT, etc.) to a Windows printer."""
+    """Print a document file (PDF, DOCX, TXT, imagen, etc.) to a Windows printer.
+
+    Compatible printers (cualquier impresora con driver de Windows):
+    - Laser: HP LaserJet, Canon LBP, Brother HL, Xerox, Kyocera
+    - Tinta: Canon GX6000, HP OfficeJet, Epson EcoTank, Brother MFC
+    - Matriciales con driver Windows: Epson LX-350, FX-890, Oki Microline
+    - Cualquier impresora instalada en Windows que soporte PDF
+
+    Conversion automatica: DOCX -> PDF, XLS -> PDF, imagen -> PDF, TXT -> PDF.
+    Metodos de impresion: nativo (PyMuPDF + win32ui) -> PDFtoPrinter -> SumatraPDF.
+    Retorna job_id para rastrear el estado via GET /devices/windows/{printer}/jobs/{id}.
+    """
     if not WINDOWS_PRINTER_AVAILABLE:
         raise HTTPException(status_code=500, detail="Windows printer support not available")
 
@@ -249,3 +282,66 @@ def _print_pdf_to_windows(pdf_path: str, printer_name: str, orientation: str, co
                 logger.warning(f"SumatraPDF failed: {e}")
 
     raise RuntimeError("All PDF printing methods failed")
+
+
+@router.post("/print/matrix", tags=["Printing"])
+async def print_matrix(request: MatrixPrintRequest):
+    """Print plain text to a dot matrix (ESC/P) printer.
+
+    Compatible printers (ESC/P / ESC/P2 protocol):
+    - Epson LX-350, LX-300+II, LX-810, LX-1170
+    - Epson FX-890II, FX-2190, DFX-9000
+    - Oki Microline 320, 390, 5720, 5790
+    - Cualquier matricial de 9 o 24 pines compatible con ESC/P
+
+    Conexiones soportadas:
+    - type="windows": via driver Windows instalado (recomendado, soporta formularios)
+    - type="usb":     USB directo sin driver (requiere WinUSB via Zadig)
+    - type="serial":  RS-232 directo (COM port)
+
+    NO usa comandos ESC/POS. Usa ESC/P (protocolo matricial de Epson).
+    No envia corte de papel ni graficos raster.
+    Para tickets termicos usar /print. Para documentos PDF usar /print/document.
+    """
+    ESC = b'\x1b'
+    FF = b'\x0c'
+
+    data = bytearray()
+    data += ESC + b'@'   # ESC @ - Inicializar impresora
+    data += ESC + b'2'   # ESC 2 - Interlineado 1/6 pulgada
+    data += request.content.encode(request.encoding, errors='replace')
+    data += b'\n\n'
+    if request.form_feed:
+        data += FF       # FF - Avance de pagina (eyecta hoja)
+
+    await asyncio.to_thread(_send_to_matrix_device, request, bytes(data))
+
+    return {
+        "success": True,
+        "message": f"Matrix print job sent ({request.type})",
+        "bytes_sent": len(data),
+    }
+
+
+def _send_to_matrix_device(request: MatrixPrintRequest, data: bytes):
+    """Send raw ESC/P bytes to matrix printer. Runs in a thread."""
+    if request.type == "windows":
+        send_raw_to_windows(request.printer_name, data)
+
+    elif request.type == "usb":
+        vid = int(request.vid, 16)
+        pid = int(request.pid, 16)
+        adapter = create_adapter("usb", vid=vid, pid=pid)
+        try:
+            adapter.write(data)
+            logger.info(f"Printed to USB matrix printer: {request.vid}:{request.pid}")
+        finally:
+            adapter.close()
+
+    elif request.type == "serial":
+        adapter = create_adapter("serial", port=request.com_port, baudrate=request.baud_rate)
+        try:
+            adapter.write(data)
+            logger.info(f"Printed to serial matrix printer: {request.com_port}")
+        finally:
+            adapter.close()

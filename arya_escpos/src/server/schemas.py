@@ -76,3 +76,41 @@ class ReportPrintRequest(BaseModel):
     printer_name: str
     title: str
     content: str
+
+
+class MatrixPrintRequest(BaseModel):
+    """Print plain text to a dot matrix (ESC/P) printer.
+
+    Compatible printers (ESC/P / ESC/P2):
+    - Epson LX-350, LX-300+II, LX-810, LX-1170
+    - Epson FX-890II, FX-2190, DFX-9000
+    - Cualquier matricial de 9 o 24 pines compatible con ESC/P
+
+    Connection types:
+    - type="windows" -> printer_name required (via driver Windows, recomendado)
+    - type="usb"     -> vid + pid required (requiere WinUSB via Zadig)
+    - type="serial"  -> com_port required (RS-232)
+    """
+    type: Literal["windows", "usb", "serial"]
+    content: str
+    encoding: str = "cp850"
+    # Avance de pagina al finalizar (para papel continuo)
+    form_feed: bool = True
+    # Windows
+    printer_name: str | None = None
+    # USB (hex strings)
+    vid: str | None = None
+    pid: str | None = None
+    # Serial
+    com_port: str | None = None
+    baud_rate: int = 9600
+
+    @model_validator(mode="after")
+    def check_required_fields(self):
+        if self.type == "windows" and not self.printer_name:
+            raise ValueError("printer_name is required for type='windows'")
+        if self.type == "usb" and (not self.vid or not self.pid):
+            raise ValueError("vid and pid are required for type='usb'")
+        if self.type == "serial" and not self.com_port:
+            raise ValueError("com_port is required for type='serial'")
+        return self

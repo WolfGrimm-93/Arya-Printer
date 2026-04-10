@@ -121,11 +121,12 @@ Base URL: `http://localhost:58181/api/v1`
 
 ### Impresion
 
-| Metodo | Ruta                    | Descripcion                              |
-|--------|-------------------------|------------------------------------------|
-| POST   | `/api/v1/print`         | Imprimir ticket ESC/POS                   |
-| POST   | `/api/v1/print/report`  | Imprimir reporte en impresora Windows     |
-| POST   | `/api/v1/print/document`| Imprimir documento (PDF, DOCX, TXT, etc.) |
+| Metodo | Ruta                    | Descripcion                              | Impresoras compatibles                  |
+|--------|-------------------------|------------------------------------------|-----------------------------------------|
+| POST   | `/api/v1/print`         | Ticket ESC/POS (termicas)                | Epson TM, CUSTOM, Star, Bixolon, Citizen|
+| POST   | `/api/v1/print/matrix`  | Texto plano ESC/P (matriciales)          | Epson LX-350, FX-890, Oki Microline     |
+| POST   | `/api/v1/print/report`  | Reporte texto plano via Windows          | Cualquier impresora con driver Windows  |
+| POST   | `/api/v1/print/document`| Documento PDF/DOCX/TXT via Windows       | Cualquier impresora con driver Windows  |
 
 ### Configuracion
 
@@ -205,9 +206,11 @@ Tipos soportados:
 
 ## Impresion
 
-### Ticket ESC/POS
+### Ticket ESC/POS — Termicas
 
 **POST** `/api/v1/print`
+
+**Impresoras compatibles:** Epson TM-T20/T88/T70, CUSTOM P3L/Q3X, Star TSP100/TSP650, Bixolon SRP-350, Citizen CT-S310II. Cualquier termica ESC/POS de 58mm u 80mm.
 
 El cliente indica el tipo de dispositivo y los datos de conexion. No hay device_id ni base de datos.
 
@@ -250,9 +253,64 @@ Campos requeridos segun tipo:
 }
 ```
 
+---
+
+### Texto Plano — Matriciales (ESC/P)
+
+**POST** `/api/v1/print/matrix`
+
+**Impresoras compatibles:** Epson LX-350, LX-300+II, LX-810, FX-890II, DFX-9000. Oki Microline 320/390. Cualquier matricial de 9 o 24 pines con protocolo ESC/P.
+
+Envia texto plano con inicializacion ESC/P. No usa comandos ESC/POS (sin corte, sin graficos raster).
+
+| Campo        | Tipo    | Requerido | Default  | Descripcion                              |
+|--------------|---------|-----------|----------|------------------------------------------|
+| `type`       | string  | Si        | -        | `windows`, `usb`, o `serial`             |
+| `content`    | string  | Si        | -        | Texto a imprimir                         |
+| `encoding`   | string  | No        | `cp850`  | Codificacion del texto                   |
+| `form_feed`  | bool    | No        | `true`   | Avanzar pagina al terminar (FF)          |
+| `printer_name` | string | Si*      | -        | Nombre Windows (para type=windows)       |
+| `vid`        | string  | Si*       | -        | VID hex (para type=usb)                  |
+| `pid`        | string  | Si*       | -        | PID hex (para type=usb)                  |
+| `com_port`   | string  | Si*       | -        | Puerto COM (para type=serial)            |
+| `baud_rate`  | int     | No        | `9600`   | Baudrate serial (para type=serial)       |
+
+**Ejemplo via Windows driver (recomendado):**
+```json
+{
+  "type": "windows",
+  "printer_name": "Epson LX-350",
+  "content": "FACTURA #001\nCliente: Juan Perez\nTotal: $100.00"
+}
+```
+
+**Ejemplo via serial RS-232:**
+```json
+{
+  "type": "serial",
+  "com_port": "COM1",
+  "baud_rate": 9600,
+  "content": "FACTURA #001\nTotal: $100.00",
+  "form_feed": true
+}
+```
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "message": "Matrix print job sent (windows)",
+  "bytes_sent": 48
+}
+```
+
+---
+
 ### Reporte
 
 **POST** `/api/v1/print/report`
+
+**Impresoras compatibles:** Cualquier impresora con driver de Windows (laser, tinta, matriciales).
 
 Imprime texto formateado en una impresora Windows (documentos, no ESC/POS).
 
@@ -267,6 +325,8 @@ Imprime texto formateado en una impresora Windows (documentos, no ESC/POS).
 ### Documento
 
 **POST** `/api/v1/print/document`
+
+**Impresoras compatibles:** Cualquier impresora con driver de Windows que soporte PDF.
 
 Sube un archivo (PDF, DOCX, TXT, etc.) y lo imprime en una impresora Windows.
 
@@ -384,12 +444,21 @@ network_scan:
 
 ## Tipos de Impresora Soportados
 
+| Endpoint            | Protocolo  | Modelos compatibles                              | Conexion              |
+|---------------------|------------|--------------------------------------------------|-----------------------|
+| `/print`            | ESC/POS    | Epson TM, CUSTOM P3L, Star TSP, Bixolon, Citizen | Windows/USB/Red/Serial/BT |
+| `/print/matrix`     | ESC/P      | Epson LX-350/FX-890, Oki Microline               | Windows/USB/Serial    |
+| `/print/report`     | Win32 RAW  | Cualquier impresora con driver Windows           | Windows               |
+| `/print/document`   | Win32 PDF  | Cualquier impresora con driver Windows           | Windows               |
+
+### Conexiones disponibles por protocolo
+
 | Tipo       | Protocolo        | Dependencia           | Uso tipico               |
 |------------|------------------|-----------------------|--------------------------|
 | Windows    | Win32 Spooler    | pywin32               | Impresoras instaladas    |
 | USB        | libusb           | pyusb + libusb DLL    | POS termicas directas    |
 | Network    | TCP socket :9100 | stdlib                | POS en red               |
-| Serial     | COM port         | pyserial              | POS por RS-232           |
+| Serial     | COM port         | pyserial              | POS/Matriciales RS-232   |
 | Bluetooth  | RFCOMM           | PyBluez (Python <3.12)| POS portatiles           |
 
 ---
@@ -531,6 +600,11 @@ Si PyBluez no esta instalado, los endpoints de Bluetooth se deshabilitan automat
 ---
 
 ## Registro de Cambios
+
+### v1.3.0
+- **Nuevo endpoint /print/matrix**: soporte para impresoras matriciales ESC/P (Epson LX-350, FX-890, Oki Microline)
+- **Comentarios de compatibilidad**: cada endpoint documenta que modelos de impresoras son compatibles
+- Conexiones soportadas en matriciales: Windows driver, USB directo, Serial RS-232
 
 ### v1.2.0
 - Puerto cambiado de 8181 a 58181 (rango privado IANA, sin conflictos)
