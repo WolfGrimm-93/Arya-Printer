@@ -111,6 +111,19 @@ def generate_certs(ssl_dir: Path) -> bool:
     return True
 
 
+def ca_is_installed() -> bool:
+    """Return True if the AryaESCPOS CA is already in the Windows trust store."""
+    try:
+        result = subprocess.run(
+            ["certutil", "-store", "Root", "Arya ESCPOS Service - Root CA"],
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0 and "Arya ESCPOS Service" in result.stdout
+    except Exception:
+        return False
+
+
 def install_ca(ca_cert_path: Path) -> bool:
     """Install CA certificate in Windows LocalMachine\\Root trust store."""
     try:
@@ -156,24 +169,32 @@ def ssl_files_exist(ssl_dir: Path) -> bool:
 
 
 def run_setup(ssl_dir: Path) -> int:
-    """Generate certs and install CA. Returns exit code.
+    """Configure SSL for localhost. Returns exit code.
 
-    Si ya existe un CA anterior con el mismo nombre lo elimina primero
-    para evitar entradas duplicadas en el store de Windows.
+    Verifica el estado actual antes de actuar:
+    - CA instalado + archivos existen  -> no hace nada (ya esta configurado)
+    - CA instalado + archivos faltan   -> regenera archivos, no reinstala CA
+    - CA no instalado                  -> genera archivos e instala CA
     """
-    # Limpiar CA anterior si existe (evita duplicados en reinstalacion)
-    print("Removing previous CA from Windows trust store (if any)...")
-    remove_ca()   # Ignoramos el resultado — puede no existir todavia
+    files_ok = ssl_files_exist(ssl_dir)
+    ca_ok = ca_is_installed()
 
-    print("Generating SSL certificates for localhost HTTPS...")
-    if not generate_certs(ssl_dir):
-        print("ERROR: Failed to generate certificates")
-        return 1
+    if ca_ok and files_ok:
+        print("SSL already configured — certificate is installed and files exist.")
+        print("Nothing to do.")
+        return 0
 
-    print("Installing CA in Windows trust store...")
-    if not install_ca(ssl_dir / "ca.crt"):
-        print("ERROR: Failed to install CA — try running as Administrator")
-        return 1
+    if not files_ok:
+        print("Generating SSL certificates for localhost HTTPS...")
+        if not generate_certs(ssl_dir):
+            print("ERROR: Failed to generate certificates")
+            return 1
+
+    if not ca_ok:
+        print("Installing CA in Windows trust store...")
+        if not install_ca(ssl_dir / "ca.crt"):
+            print("ERROR: Failed to install CA — try running as Administrator")
+            return 1
 
     print()
     print("SSL setup complete.")
