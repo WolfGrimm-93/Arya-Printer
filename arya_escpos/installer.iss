@@ -55,6 +55,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 [Tasks]
 Name: "autostart"; Description: "Iniciar servicio automáticamente al arrancar Windows (recomendado)"; GroupDescription: "Opciones de servicio:"; Flags: checkedonce
 Name: "firewall"; Description: "Agregar excepción en el Firewall de Windows (puerto 58181)"; GroupDescription: "Configuración de red:"; Flags: checkedonce
+Name: "ssl"; Description: "Habilitar HTTPS en localhost (elimina advertencias del navegador Chrome)"; GroupDescription: "Seguridad:";
 Name: "scanprinters"; Description: "Escanear impresoras disponibles después de la instalación"; GroupDescription: "Configuración inicial:";
 
 [Files]
@@ -75,6 +76,7 @@ Source: "setup_firewall.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; Crear carpetas necesarias con permisos completos
 Name: "{app}\logs"; Permissions: everyone-full
 Name: "{app}\config"; Permissions: everyone-modify
+Name: "{app}\ssl"; Permissions: everyone-modify
 
 [Registry]
 ; Registrar la aplicación
@@ -92,6 +94,9 @@ Filename: "{sys}\schtasks.exe"; Parameters: "/Run /TN ""AryaESCPOS"""; Tasks: au
 ; Configurar excepción al firewall (si la tarea está seleccionada)
 ; Script verifica si existe y solo crea si no está
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\setup_firewall.ps1"""; Tasks: firewall; Flags: runhidden waituntilterminated; StatusMsg: "Configurando Firewall de Windows..."
+
+; Generar certificado SSL e instalar CA en Windows (si la tarea está seleccionada)
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--setup-ssl"; Tasks: ssl; Flags: runhidden waituntilterminated; StatusMsg: "Configurando HTTPS para localhost..."
 
 ; Esperar 5 segundos para que el servicio esté completamente iniciado (solo si autostart)
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""Start-Sleep -Seconds 5"""; Tasks: autostart; Flags: runhidden waituntilterminated; StatusMsg: "Esperando inicio del servicio..."
@@ -115,9 +120,13 @@ Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""AryaESCPOS"" /F"; Fla
 ; Eliminar regla del firewall (si existe)
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Arya ESCPOS Service"""; Flags: runhidden; RunOnceId: "DeleteFirewallRule"
 
+; Eliminar certificado SSL de Windows (si existe)
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--remove-ssl"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveSSL"
+
 [UninstallDelete]
-; Eliminar logs
+; Eliminar logs y certificados SSL
 Type: filesandordirs; Name: "{app}\logs"
+Type: filesandordirs; Name: "{app}\ssl"
 
 [Code]
 // Función para verificar si la tarea programada existe

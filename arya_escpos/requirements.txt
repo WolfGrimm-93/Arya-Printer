@@ -34,6 +34,9 @@ pypandoc==1.16.2 # Universal document converter
 # Logging
 loguru==0.7.2
 
+# SSL certificate generation for localhost HTTPS
+cryptography==46.0.7
+
 # Image Processing (for ESC/POS printing)
 qrcode==7.4.2
 python-barcode==0.15.1  # Barcode generation for matrix printers (ESC/P raster)
