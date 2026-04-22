@@ -32,7 +32,7 @@ Arya ESCPOS Service (FastAPI + Uvicorn)
 ```
 arya_escpos/
 ├── src/
-│   ├── main.py                    # Entry point
+│   ├── main.py                    # Entry point + SSL detection
 │   ├── core/
 │   │   ├── base_adapter.py        # Clase abstracta BaseAdapter
 │   │   └── command_builder.py     # Constructor de comandos ESC/POS
@@ -42,10 +42,10 @@ arya_escpos/
 │   │   ├── serial_adapter.py      # COM port
 │   │   └── bluetooth_adapter.py   # RFCOMM
 │   ├── server/
-│   │   ├── api_server.py          # FastAPI factory + CORS
+│   │   ├── api_server.py          # FastAPI factory + CORS + PNA headers
 │   │   ├── routes.py              # Router principal
 │   │   ├── device_routes.py       # Scan y status de dispositivos
-│   │   ├── print_routes.py        # Impresion (tickets, reportes, documentos)
+│   │   ├── print_routes.py        # Impresion (tickets, reportes, documentos, matrix)
 │   │   ├── config_routes.py       # Configuracion
 │   │   ├── schemas.py             # Pydantic schemas
 │   │   ├── adapter_factory.py     # Creacion centralizada de adaptadores
@@ -55,11 +55,15 @@ arya_escpos/
 │       ├── logger.py              # Loguru con rotacion diaria
 │       ├── exceptions.py          # Excepciones custom
 │       ├── pdf_printer.py         # Impresion nativa PDF
-│       └── document_converter.py  # Conversion de documentos a PDF
+│       ├── document_converter.py  # Conversion de documentos a PDF
+│       ├── matrix_command_builder.py  # Constructor de comandos ESC/P
+│       ├── print_history.py       # Historial en memoria (deque thread-safe)
+│       └── ssl_setup.py           # SSL con mkcert para HTTPS localhost
 ├── config/
 │   └── settings.yaml              # Configuracion principal
 ├── libs/
 │   └── libusb-1.0.dll             # Driver USB para Windows
+├── mkcert.exe                     # Herramienta para certificados SSL confiables
 ├── tests/                         # Tests con pytest
 ├── installer.iss                  # Script Inno Setup
 ├── build_executable.py            # Script PyInstaller
@@ -102,7 +106,7 @@ El servicio arranca en `http://localhost:58181`. Documentacion interactiva en `/
 
 ## API Endpoints
 
-Base URL: `http://localhost:58181/api/v1`
+Base URL: `https://localhost:58181/api/v1` (HTTPS si SSL configurado, HTTP si no)
 
 ### Health
 
@@ -264,17 +268,31 @@ Campos requeridos segun tipo:
 
 Envia texto plano con inicializacion ESC/P. No usa comandos ESC/POS (sin corte, sin graficos raster).
 
-| Campo        | Tipo    | Requerido | Default  | Descripcion                              |
-|--------------|---------|-----------|----------|------------------------------------------|
-| `type`       | string  | Si        | -        | `windows`, `usb`, o `serial`             |
-| `content`    | string  | Si        | -        | Texto a imprimir                         |
-| `encoding`   | string  | No        | `cp850`  | Codificacion del texto                   |
-| `form_feed`  | bool    | No        | `true`   | Avanzar pagina al terminar (FF)          |
-| `printer_name` | string | Si*      | -        | Nombre Windows (para type=windows)       |
-| `vid`        | string  | Si*       | -        | VID hex (para type=usb)                  |
-| `pid`        | string  | Si*       | -        | PID hex (para type=usb)                  |
-| `com_port`   | string  | Si*       | -        | Puerto COM (para type=serial)            |
-| `baud_rate`  | int     | No        | `9600`   | Baudrate serial (para type=serial)       |
+| Campo          | Tipo    | Requerido | Default    | Descripcion                              |
+|----------------|---------|-----------|------------|------------------------------------------|
+| `type`         | string  | Si        | -          | `windows`, `usb`, o `serial`             |
+| `content`      | string  | Si        | -          | Texto a imprimir                         |
+| `encoding`     | string  | No        | `cp850`    | Codificacion del texto                   |
+| `form_feed`    | bool    | No        | `true`     | Avanzar pagina al terminar (FF)          |
+| `font`         | string  | No        | `roman`    | Tipografia: `roman` o `sans_serif`       |
+| `cpi`          | int     | No        | `10`       | Caracteres por pulgada: `10`, `12` o `15`|
+| `barcodes`     | array   | No        | `[]`       | Codigos de barras a imprimir (ver abajo) |
+| `printer_name` | string  | Si*       | -          | Nombre Windows (para type=windows)       |
+| `vid`          | string  | Si*       | -          | VID hex (para type=usb)                  |
+| `pid`          | string  | Si*       | -          | PID hex (para type=usb)                  |
+| `com_port`     | string  | Si*       | -          | Puerto COM (para type=serial)            |
+| `baud_rate`    | int     | No        | `9600`     | Baudrate serial (para type=serial)       |
+
+**Estructura de cada elemento en `barcodes`:**
+
+| Campo        | Tipo   | Default    | Descripcion                                                    |
+|--------------|--------|------------|----------------------------------------------------------------|
+| `data`       | string | requerido  | Datos a codificar                                              |
+| `type`       | string | `code39`   | Tipo: `code39`, `code128`, `ean13`, `ean8`, `upca`, `upc`     |
+| `width_dots` | int    | `300`      | Ancho en dots                                                  |
+| `height_dots`| int    | `48`       | Alto en dots (bandas ESC/P)                                    |
+
+**Ejemplo con fuente, CPI y codigo de barras:**
 
 **Ejemplo via Windows driver (recomendado):**
 ```json
@@ -282,6 +300,20 @@ Envia texto plano con inicializacion ESC/P. No usa comandos ESC/POS (sin corte, 
   "type": "windows",
   "printer_name": "Epson LX-350",
   "content": "FACTURA #001\nCliente: Juan Perez\nTotal: $100.00"
+}
+```
+
+**Ejemplo con fuente, CPI y codigo de barras:**
+```json
+{
+  "type": "windows",
+  "printer_name": "Epson LX-350",
+  "font": "roman",
+  "cpi": 12,
+  "content": "FACTURA #001\nCliente: Juan Perez\nTotal: $100.00",
+  "barcodes": [
+    { "data": "FAC-001-2026", "type": "code128", "width_dots": 300, "height_dots": 48 }
+  ]
 }
 ```
 
@@ -534,23 +566,65 @@ Requiere PyInstaller (`pip install pyinstaller`).
 - Instala en `C:\Program Files\AryaESCPOS`
 - Crea Tarea Programada de Windows (inicio automatico con SYSTEM)
 - Opcionalmente abre puerto 58181 en firewall
+- Opcionalmente configura HTTPS con certificado de confianza local (mkcert)
 - Opcionalmente escanea impresoras
 - Desinstalacion limpia desde Panel de Control
 
 ### Instalacion silenciosa
 
 ```powershell
-.\AryaESCPOS_Setup_v1.0.0.exe /VERYSILENT
+.\AryaESCPOS_Setup_v1.3.0.exe /VERYSILENT
 ```
 
 ### Actualizar version existente
 
 El instalador detecta la version previa, detiene el servicio, actualiza archivos y reinicia. La configuracion se mantiene.
 
-1. Cambiar version en `installer.iss`: `#define MyAppVersion "1.1.0"`
+1. Cambiar version en `installer.iss`: `#define MyAppVersion "1.x.0"`
 2. Recompilar: `python build_executable.py`
 3. Recompilar instalador (F9 en Inno Setup)
 4. Ejecutar nuevo instalador sobre la instalacion existente
+
+---
+
+## HTTPS en localhost
+
+El servicio puede correr en HTTPS para evitar advertencias de Chrome cuando el frontend es una pagina HTTPS que llama a `localhost`. Usa [mkcert](https://github.com/FiloSottile/mkcert) para generar certificados confiables por todos los navegadores sin ningun prompt manual.
+
+### Configurar HTTPS (opcion en instalador)
+
+Durante la instalacion, marcar la opcion **"Habilitar HTTPS en localhost"**. El instalador ejecuta automaticamente:
+
+```
+AryaESCPOS.exe --setup-ssl
+```
+
+Esto instala el CA de mkcert en Windows, Chrome, Firefox y Edge, y genera `ssl/server.crt` + `ssl/server.key`.
+
+### Comandos manuales
+
+```powershell
+# Configurar HTTPS (instala CA + genera certs)
+& "C:\Program Files\AryaESCPOS\AryaESCPOS.exe" --setup-ssl
+
+# Eliminar HTTPS (borra CA + certs)
+& "C:\Program Files\AryaESCPOS\AryaESCPOS.exe" --remove-ssl
+```
+
+### Comportamiento automatico
+
+- Si `ssl/server.crt` y `ssl/server.key` existen al iniciar → el servicio arranca en **HTTPS**
+- Si no existen → arranca en **HTTP** (sin cambios en configuracion)
+- Si el certificado vence en ≤ 30 dias → `--setup-ssl` lo renueva automaticamente
+- El certificado generado es valido por **2 anos**, el CA por **10 anos**
+
+### Troubleshooting SSL
+
+| Problema | Solucion |
+|----------|----------|
+| Chrome sigue mostrando advertencia | Ejecutar `--setup-ssl` como Administrador |
+| `mkcert.exe not found` | Verificar que `mkcert.exe` esta en `C:\Program Files\AryaESCPOS\` |
+| Reinstalacion genera cert nuevo | Normal — `--setup-ssl` detecta CA existente y solo regenera los archivos |
 
 ---
 
@@ -650,9 +724,15 @@ Si PyBluez no esta instalado, los endpoints de Bluetooth se deshabilitan automat
 ## Registro de Cambios
 
 ### v1.3.0
+- **HTTPS localhost**: certificados confiables via mkcert — Chrome/Edge/Firefox sin prompts manuales
 - **Nuevo endpoint /print/matrix**: soporte para impresoras matriciales ESC/P (Epson LX-350, FX-890, Oki Microline)
-- **Comentarios de compatibilidad**: cada endpoint documenta que modelos de impresoras son compatibles
-- Conexiones soportadas en matriciales: Windows driver, USB directo, Serial RS-232
+- **Fuentes y CPI**: campos `font` (roman/sans_serif) y `cpi` (10/12/15) en /print/matrix
+- **Codigos de barras ESC/P**: campo `barcodes` en /print/matrix — renderizado raster via python-barcode
+- **Historial de impresion**: GET /print/history — registro en memoria de los ultimos 500 trabajos
+- **Compatibilidad de modelos**: cada endpoint documenta que impresoras son compatibles
+- **Validacion hex**: vid/pid validan formato hexadecimal antes de enviar al dispositivo
+- **Fix job ID capture**: corregido para PDF impresos via PyMuPDF (buscaba nombre incorrecto en cola)
+- **Fix resource leak**: fitz.Document ahora siempre se cierra en bloque finally
 
 ### v1.2.0
 - Puerto cambiado de 8181 a 58181 (rango privado IANA, sin conflictos)

@@ -130,6 +130,17 @@ try:
     exe_path = exe_folder / f"{OUTPUT_NAME}.exe"
 
     if exe_path.exists():
+        # Copy mkcert.exe next to the main executable (required for SSL)
+        mkcert_src = PROJECT_ROOT / "mkcert.exe"
+        mkcert_dst = exe_folder / "mkcert.exe"
+        if mkcert_src.exists():
+            shutil.copy2(mkcert_src, mkcert_dst)
+            print(f"  Copiado: mkcert.exe -> {mkcert_dst}")
+        else:
+            print(f"  ADVERTENCIA: mkcert.exe no encontrado en {mkcert_src}")
+            print("  Descarga desde: https://github.com/FiloSottile/mkcert/releases/latest")
+            print("  y coloca el exe como 'mkcert.exe' en la raiz del proyecto.")
+
         total_size = sum(f.stat().st_size for f in exe_folder.rglob('*') if f.is_file())
         size_mb = total_size / (1024 * 1024)
 

@@ -40,11 +40,11 @@ def main():
     # ── SSL setup commands (run and exit, no server needed) ───────────────
     if "--setup-ssl" in sys.argv:
         from utils.ssl_setup import run_setup
-        sys.exit(run_setup(SSL_DIR))
+        sys.exit(run_setup(SSL_DIR, install_dir))
 
     if "--remove-ssl" in sys.argv:
         from utils.ssl_setup import run_remove
-        sys.exit(run_remove(SSL_DIR))
+        sys.exit(run_remove(SSL_DIR, install_dir))
 
     # 1. Load configuration
     try:

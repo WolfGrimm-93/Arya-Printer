@@ -68,6 +68,9 @@ Source: "config\*"; DestDir: "{app}\config"; Flags: ignoreversion recursesubdirs
 ; Carpeta libs con libusb
 Source: "libs\*"; DestDir: "{app}\libs"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; mkcert para SSL confiable en navegadores (Chrome, Firefox, Edge)
+Source: "mkcert.exe"; DestDir: "{app}"; Flags: ignoreversion
+
 ; Scripts de PowerShell
 Source: "install_task_production.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "setup_firewall.ps1"; DestDir: "{app}"; Flags: ignoreversion
@@ -120,7 +123,7 @@ Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""AryaESCPOS"" /F"; Fla
 ; Eliminar regla del firewall (si existe)
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Arya ESCPOS Service"""; Flags: runhidden; RunOnceId: "DeleteFirewallRule"
 
-; Eliminar certificado SSL de Windows (si existe)
+; Eliminar certificado mkcert de Windows y navegadores (si existe)
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--remove-ssl"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveSSL"
 
 [UninstallDelete]
