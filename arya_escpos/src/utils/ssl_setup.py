@@ -156,7 +156,15 @@ def ssl_files_exist(ssl_dir: Path) -> bool:
 
 
 def run_setup(ssl_dir: Path) -> int:
-    """Generate certs and install CA. Returns exit code."""
+    """Generate certs and install CA. Returns exit code.
+
+    Si ya existe un CA anterior con el mismo nombre lo elimina primero
+    para evitar entradas duplicadas en el store de Windows.
+    """
+    # Limpiar CA anterior si existe (evita duplicados en reinstalacion)
+    print("Removing previous CA from Windows trust store (if any)...")
+    remove_ca()   # Ignoramos el resultado — puede no existir todavia
+
     print("Generating SSL certificates for localhost HTTPS...")
     if not generate_certs(ssl_dir):
         print("ERROR: Failed to generate certificates")
