@@ -168,28 +168,65 @@ def ssl_files_exist(ssl_dir: Path) -> bool:
     )
 
 
+def cert_days_remaining(ssl_dir: Path) -> int | None:
+    """Return days until server.crt expires, or None if file doesn't exist."""
+    cert_path = ssl_dir / "server.crt"
+    if not cert_path.exists():
+        return None
+    try:
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        delta = cert.not_valid_after_utc - datetime.now(timezone.utc)
+        return delta.days
+    except Exception:
+        return None
+
+
+def cert_needs_renewal(ssl_dir: Path, renew_threshold_days: int = 30) -> bool:
+    """Return True if cert is expired, invalid, or expiring within threshold."""
+    days = cert_days_remaining(ssl_dir)
+    if days is None:
+        return True
+    return days <= renew_threshold_days
+
+
 def run_setup(ssl_dir: Path) -> int:
     """Configure SSL for localhost. Returns exit code.
 
     Verifica el estado actual antes de actuar:
-    - CA instalado + archivos existen  -> no hace nada (ya esta configurado)
-    - CA instalado + archivos faltan   -> regenera archivos, no reinstala CA
-    - CA no instalado                  -> genera archivos e instala CA
+    - CA instalado + archivos validos (>30 dias)  -> no hace nada
+    - Certificado vencido o <= 30 dias restantes  -> renueva (borra CA, regenera, reinstala)
+    - CA instalado + archivos faltan              -> regenera archivos, no toca CA
+    - CA no instalado                             -> genera archivos e instala CA
     """
     files_ok = ssl_files_exist(ssl_dir)
     ca_ok = ca_is_installed()
+    needs_renewal = cert_needs_renewal(ssl_dir)
+    days = cert_days_remaining(ssl_dir)
 
-    if ca_ok and files_ok:
-        print("SSL already configured — certificate is installed and files exist.")
+    # Caso: todo OK y vigente
+    if ca_ok and files_ok and not needs_renewal:
+        print(f"SSL already configured — certificate valid for {days} more days.")
         print("Nothing to do.")
         return 0
 
+    # Caso: certificado vencido o proximo a vencer
+    if files_ok and needs_renewal:
+        if days is not None and days <= 0:
+            print(f"SSL certificate EXPIRED {abs(days)} days ago — renewing...")
+        else:
+            print(f"SSL certificate expires in {days} days — renewing...")
+        remove_ca()
+        files_ok = False
+        ca_ok = False
+
+    # Caso: archivos faltan o se acaban de borrar por renovacion
     if not files_ok:
         print("Generating SSL certificates for localhost HTTPS...")
         if not generate_certs(ssl_dir):
             print("ERROR: Failed to generate certificates")
             return 1
 
+    # Caso: CA no instalado o se acaba de borrar por renovacion
     if not ca_ok:
         print("Installing CA in Windows trust store...")
         if not install_ca(ssl_dir / "ca.crt"):
@@ -199,7 +236,6 @@ def run_setup(ssl_dir: Path) -> int:
     print()
     print("SSL setup complete.")
     print("The service will now use: https://localhost:58181")
-    print("Update your frontend to use https:// instead of http://")
     return 0
 
 
