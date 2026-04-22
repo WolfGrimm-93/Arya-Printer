@@ -34,7 +34,12 @@ def generate_certs(ssl_dir: Path) -> bool:
 
     # ── CA key + certificate (10 years) ───────────────────────────────────
     ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AryaESCPOS Root CA")])
+    ca_name = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "DO"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Arya Development"),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Arya ESCPOS Service"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "Arya ESCPOS Service - Root CA"),
+    ])
 
     ca_cert = (
         x509.CertificateBuilder()
@@ -54,7 +59,12 @@ def generate_certs(ssl_dir: Path) -> bool:
 
     # ── Server key + certificate (5 years) ────────────────────────────────
     server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    server_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    server_name = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "DO"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Arya Development"),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Arya ESCPOS Service"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+    ])
 
     server_cert = (
         x509.CertificateBuilder()
@@ -123,7 +133,7 @@ def remove_ca() -> bool:
     """Remove AryaESCPOS CA from Windows LocalMachine\\Root trust store."""
     try:
         result = subprocess.run(
-            ["certutil", "-delstore", "Root", "AryaESCPOS Root CA"],
+            ["certutil", "-delstore", "Root", "Arya ESCPOS Service - Root CA"],
             capture_output=True,
             text=True,
         )
