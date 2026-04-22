@@ -1,8 +1,9 @@
 """
 FastAPI Application Factory
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from contextlib import asynccontextmanager
 
 from server.routes import router
@@ -47,6 +48,26 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Private Network Access (PNA) middleware
+    # Chrome exige Access-Control-Allow-Private-Network: true cuando una pagina
+    # HTTPS hace fetch a localhost (HTTP). Sin este header Chrome bloqueara
+    # las solicitudes en versiones futuras.
+    @app.middleware("http")
+    async def private_network_access(request: Request, call_next):
+        if request.method == "OPTIONS" and request.headers.get("Access-Control-Request-Private-Network"):
+            return Response(
+                status_code=204,
+                headers={
+                    "Access-Control-Allow-Origin": request.headers.get("Origin", "*"),
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Private-Network": "true",
+                },
+            )
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
     
     # Include routers
     app.include_router(router, prefix="/api/v1")
