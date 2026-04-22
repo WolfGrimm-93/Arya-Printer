@@ -36,7 +36,7 @@ def get_job_id_from_queue(printer_name: str, doc_name: str, timeout_sec: int = 5
 
         while time.time() - start_time < timeout_sec:
             try:
-                jobs = win32print.EnumJobs(printer_handle, 0, -1)
+                jobs = win32print.EnumJobs(printer_handle, 0, -1, 1)
 
                 if not jobs:
                     logger.debug(f"No jobs in queue yet for {printer_name}")
@@ -111,6 +111,7 @@ def print_pdf_native(
     if not PDF_NATIVE_AVAILABLE:
         raise RuntimeError("PyMuPDF, win32ui or Pillow not available")
 
+    doc = None
     hDC = None
     try:
         doc = fitz.open(pdf_path)
@@ -170,9 +171,6 @@ def print_pdf_native(
             hDC.EndPage()
 
         hDC.EndDoc()
-        hDC.DeleteDC()
-        doc.close()
-
         return True
 
     except Exception as e:
@@ -180,7 +178,18 @@ def print_pdf_native(
         try:
             if hDC:
                 hDC.AbortDoc()
-                hDC.DeleteDC()
         except Exception:
             pass
         return False
+
+    finally:
+        try:
+            if hDC:
+                hDC.DeleteDC()
+        except Exception:
+            pass
+        try:
+            if doc:
+                doc.close()
+        except Exception:
+            pass

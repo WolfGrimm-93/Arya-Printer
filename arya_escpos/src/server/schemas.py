@@ -1,6 +1,15 @@
 """Pydantic schemas for API request/response validation."""
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Literal, Optional
+
+
+def _validate_hex(v: Optional[str], field_name: str) -> Optional[str]:
+    if v is not None:
+        try:
+            int(v, 16)
+        except ValueError:
+            raise ValueError(f"{field_name} must be a valid hex string (e.g. '04b8'), got '{v}'")
+    return v
 
 
 class DeviceInfo(BaseModel):
@@ -56,6 +65,11 @@ class PrintRequest(BaseModel):
     com_port: str | None = None
     # Bluetooth
     address: str | None = None
+
+    @field_validator("vid", "pid", mode="before")
+    @classmethod
+    def validate_hex(cls, v, info):
+        return _validate_hex(v, info.field_name)
 
     @model_validator(mode="after")
     def check_required_fields(self):
@@ -118,6 +132,11 @@ class MatrixPrintRequest(BaseModel):
     # Serial
     com_port: Optional[str] = None
     baud_rate: int = 9600
+
+    @field_validator("vid", "pid", mode="before")
+    @classmethod
+    def validate_hex(cls, v, info):
+        return _validate_hex(v, info.field_name)
 
     @model_validator(mode="after")
     def check_required_fields(self):
