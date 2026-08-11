@@ -1,8 +1,12 @@
 """
 PDF Printer Utility
-Uses PyMuPDF to render PDF pages and win32print to print them.
+Uses pypdfium2 (PDFium, Apache-2.0) to render PDF pages and win32print to
+print them. PyMuPDF (AGPL-3.0/comercial) fue reemplazado por este motivo:
+embeber una libreria AGPL dentro de la app fuerza a liberar el codigo fuente
+completo de este servicio bajo AGPL, algo no aceptable para un producto
+comercial sin pagar la licencia comercial de Artifex. PDFium es Apache-2.0,
+sin esa restriccion.
 """
-import io
 from pathlib import Path
 
 from utils.logger import get_logger
@@ -10,11 +14,11 @@ from utils.logger import get_logger
 logger = get_logger()
 
 try:
-    import fitz  # PyMuPDF
+    import pypdfium2 as pdfium
     import win32ui
     import win32con
     import win32print
-    from PIL import Image, ImageWin
+    from PIL import ImageWin
     PDF_NATIVE_AVAILABLE = True
 except ImportError:
     PDF_NATIVE_AVAILABLE = False
@@ -109,12 +113,12 @@ def print_pdf_native(
         True if successful.
     """
     if not PDF_NATIVE_AVAILABLE:
-        raise RuntimeError("PyMuPDF, win32ui or Pillow not available")
+        raise RuntimeError("pypdfium2, win32ui or Pillow not available")
 
     doc = None
     hDC = None
     try:
-        doc = fitz.open(pdf_path)
+        doc = pdfium.PdfDocument(pdf_path)
 
         hDC = win32ui.CreateDC()
         hDC.CreatePrinterDC(printer_name)
@@ -146,11 +150,7 @@ def print_pdf_native(
             page = doc[page_num]
 
             # Render page to image at 150 DPI
-            mat = fitz.Matrix(150 / 72, 150 / 72)
-            pix = page.get_pixmap(matrix=mat, alpha=False)
-
-            img_data = pix.tobytes("ppm")
-            img = Image.open(io.BytesIO(img_data))
+            img = page.render(scale=150 / 72).to_pil().convert("RGB")
 
             hDC.StartPage()
 

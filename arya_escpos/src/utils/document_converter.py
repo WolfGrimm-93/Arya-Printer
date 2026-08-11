@@ -96,26 +96,32 @@ def _convert_image_to_pdf(image_path: str) -> Optional[str]:
 
 
 def _convert_text_to_pdf(text_path: str) -> Optional[str]:
-    """Convert text file to PDF."""
+    """Convert text file to PDF.
+
+    Usa fpdf2 (MIT) en vez de PyMuPDF/fitz (AGPL-3.0/comercial) -- ver
+    pdf_printer.py para el razonamiento completo del reemplazo. A diferencia
+    del fitz.insert_textbox() original (que truncaba en silencio el texto
+    que no entraba en una sola pagina), set_auto_page_break() agrega paginas
+    nuevas automaticamente -- corrige esa limitacion conocida en vez de
+    replicarla.
+    """
     try:
-        import fitz  # PyMuPDF
+        from fpdf import FPDF
 
         with open(text_path, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
 
-        doc = fitz.open()
-        page = doc.new_page(width=595, height=842)  # A4
-
-        rect = fitz.Rect(50, 50, 545, 792)
-        page.insert_textbox(
-            rect, text, fontsize=10, fontname="courier", align=fitz.TEXT_ALIGN_LEFT
-        )
+        pdf = FPDF(format=(595, 842), unit="pt")  # A4 en puntos, igual que antes
+        pdf.set_margins(left=50, top=50, right=50)
+        pdf.set_auto_page_break(auto=True, margin=50)
+        pdf.add_page()
+        pdf.set_font("Courier", size=10)
+        pdf.multi_cell(0, 12, text)
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             pdf_path = f.name
 
-        doc.save(pdf_path)
-        doc.close()
+        pdf.output(pdf_path)
         return pdf_path
 
     except Exception as e:

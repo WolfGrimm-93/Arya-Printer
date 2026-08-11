@@ -24,8 +24,11 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 
 # PDF Printing
-PyMuPDF==1.23.8  # Native PDF rendering and printing
-Pillow==10.2.0   # Image handling for PDF printing
+# pypdfium2 (Apache-2.0) reemplaza a PyMuPDF (AGPL-3.0/comercial, ~10-50k USD/año):
+# embeber una libreria AGPL en la app obligaria a liberar el codigo fuente completo.
+pypdfium2==5.12.1  # Native PDF rendering and printing
+fpdf2==2.8.8       # PDF creation from text (reemplaza fitz.new_page()/insert_textbox())
+Pillow==10.2.0     # Image handling for PDF printing
 
 # Document Conversion
 docx2pdf==0.1.8  # Word to PDF conversion
