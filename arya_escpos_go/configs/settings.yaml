@@ -1,0 +1,53 @@
+# Arya ESCPOS Service (Go) Configuration
+#
+# Mirrors arya_escpos/config/settings.yaml's structure, with two deliberate
+# divergences from the Python service (see internal/config/types.go):
+#   - server.host defaults to 127.0.0.1, not 0.0.0.0 (critical audit finding:
+#     the Python service was reachable from any host on the network with no
+#     authentication).
+#   - security is a new block with no Python equivalent, closing the rest of
+#     the audit findings (no auth, CORS wide open, no upload limits, no SSRF
+#     guard on network_scan).
+
+server:
+  host: "127.0.0.1"
+  port: 58181
+
+logging:
+  level: "INFO"
+  log_dir: "logs"           # rotated by lumberjack, see internal/logging
+  retention_days: 15        # delete logs older than 15 days
+
+discovery:
+  auto_scan_interval: 30    # seconds, 0 to disable
+  usb_enabled: true
+  network_enabled: true
+  serial_enabled: true
+  # bluetooth intentionally omitted: out of scope for this v1
+
+devices:
+  auto_reconnect: true
+  connection_timeout: 5     # seconds
+  retry_attempts: 3
+
+printers:
+  paper_width: 80           # mm
+
+network_scan:
+  # Allowlist actually enforced by internal/netguard before dialing any
+  # type="network" target — in the Python service this block existed but was
+  # never checked (SSRF gap, audit finding).
+  enabled: true
+  subnets:
+    - "192.168.1.0/24"
+  ports:
+    - 9100
+    - 9101
+  timeout: 2                # seconds
+
+security:
+  auth_enabled: true         # require X-API-Key on all /api/v1/* routes
+  api_key_path: "secrets/apikey.key"  # relative to install dir
+  allowed_origins: []        # CORS whitelist; empty = no cross-origin requests allowed
+  max_upload_bytes: 52428800 # 50 MB, applies to POST /api/v1/print/document
+  max_image_bytes: 5242880   # 5 MB, applies to decoded PrintRequest.header_image
