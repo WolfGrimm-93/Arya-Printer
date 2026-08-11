@@ -18,6 +18,7 @@ on:
     branches: [main]
     paths:
       - 'arya_escpos_go/**'
+  workflow_dispatch: {}
 
 permissions:
   contents: write
