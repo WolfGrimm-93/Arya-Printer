@@ -1,0 +1,24 @@
+# Compiled binaries (built locally, not part of source)
+aryaprinter.exe
+*.exe
+!mkcert.exe
+*.test
+/dist/
+/bin/
+
+# Runtime secrets — the per-installation API key, never commit
+secrets/
+
+# Generated TLS certs/keys (mkcert output, per-installation)
+ssl/
+
+# Runtime logs
+logs/
+*.log
+
+# Local config overrides, if anyone creates one following the Python project's convention
+configs/local_settings.yaml
+
+# IDEs
+.vscode/
+.idea/
