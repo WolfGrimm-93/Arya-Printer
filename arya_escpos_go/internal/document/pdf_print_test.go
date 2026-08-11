@@ -10,10 +10,12 @@ import (
 )
 
 func TestPrintPDF_RequiresPrinterTool(t *testing.T) {
-	if findPDFToPrinter() == "" && findSumatraPDF() == "" {
-		t.Skip("requires PDFtoPrinter.exe or SumatraPDF.exe, not available in this environment")
-	}
-	t.Skip("PDFtoPrinter/SumatraPDF found but exercising an actual print requires a real Windows printer; not run automatically")
+	// The native tier (internal/pdfrender + internal/winspool) needs no
+	// external tool install, unlike the PDFtoPrinter.exe/SumatraPDF.exe
+	// fallback tiers — but exercising any tier's actual success path still
+	// needs a real Windows printer to send bits to, which this environment
+	// may or may not have. Not run automatically either way.
+	t.Skip("exercising an actual successful print requires a real Windows printer; not run automatically")
 }
 
 func TestPrintPDF_RejectsPrinterNameLookingLikeAFlag(t *testing.T) {
@@ -42,11 +44,18 @@ func TestPrintPDF_RejectsPrinterNameLookingLikeAFlag(t *testing.T) {
 	}
 }
 
-func TestPrintPDF_NoToolInstalledReturnsServiceUnavailable(t *testing.T) {
-	if findPDFToPrinter() != "" || findSumatraPDF() != "" {
-		t.Skip("a PDF printing tool is installed in this environment; cannot exercise the not-found path")
-	}
-
+// TestPrintPDF_AllTiersFailReturnsBadGateway exercises the "everything
+// failed" path with a nonexistent printer name and a deliberately invalid
+// PDF (just a header/EOF, no real page data). This is deterministic
+// regardless of the environment: the native tier can't open the fake PDF at
+// all (fails in pdfrender.PageCount before ever touching the printer), and
+// PDFtoPrinter.exe/SumatraPDF.exe — if installed — would fail too, since
+// "Some Printer" doesn't exist. Since the native tier no longer depends on
+// any external install (unlike the old PDFtoPrinter/SumatraPDF-only setup),
+// PrintPDF now always has at least one real attempt to report, so the
+// failure surfaces as contract.BadGateway, not the old
+// contract.ServiceUnavailable "nothing is installed" case.
+func TestPrintPDF_AllTiersFailReturnsBadGateway(t *testing.T) {
 	dir := t.TempDir()
 	pdfPath := filepath.Join(dir, "fake.pdf")
 	if err := os.WriteFile(pdfPath, []byte("%PDF-1.4\n%%EOF"), 0o644); err != nil {
@@ -55,16 +64,16 @@ func TestPrintPDF_NoToolInstalledReturnsServiceUnavailable(t *testing.T) {
 
 	err := PrintPDF(context.Background(), pdfPath, "Some Printer", contract.DocumentPrintOptions{})
 	if err == nil {
-		t.Fatal("expected an error when no PDF printing tool is installed")
+		t.Fatal("expected an error when every print tier fails")
 	}
 	apiErr, ok := err.(*contract.APIError)
 	if !ok {
 		t.Fatalf("error type = %T, want *contract.APIError", err)
 	}
-	if apiErr.HTTPStatus != 503 {
-		t.Fatalf("HTTPStatus = %d, want 503", apiErr.HTTPStatus)
+	if apiErr.HTTPStatus != 502 {
+		t.Fatalf("HTTPStatus = %d, want 502", apiErr.HTTPStatus)
 	}
-	if apiErr.Code != "pdf_printer_not_found" {
-		t.Fatalf("Code = %q, want %q", apiErr.Code, "pdf_printer_not_found")
+	if apiErr.Code != "pdf_print_failed" {
+		t.Fatalf("Code = %q, want %q", apiErr.Code, "pdf_print_failed")
 	}
 }

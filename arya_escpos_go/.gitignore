@@ -2,6 +2,7 @@
 aryaprinter.exe
 *.exe
 !mkcert.exe
+!libs/SumatraPDF.exe
 *.test
 /dist/
 /bin/

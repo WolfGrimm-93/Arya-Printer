@@ -82,6 +82,14 @@ Source: "..\configs\settings.yaml"; DestDir: "{app}\configs"; Flags: ignoreversi
 ; Driver USB para impresoras termicas sin cola de Windows.
 Source: "..\libs\libusb-1.0.dll"; DestDir: "{app}\libs"; Flags: ignoreversion
 
+; SumatraPDF portable (GPLv3, ver libs\THIRD-PARTY-NOTICES.md) empaquetado
+; para que /print/document funcione sin que el operador instale nada aparte
+; -- fallback de impresion de PDF cuando el renderizado nativo (PDFium) no
+; esta disponible. internal/document/pdf_print.go lo busca en {app}\libs\
+; antes que en Program Files.
+Source: "..\libs\SumatraPDF.exe"; DestDir: "{app}\libs"; Flags: ignoreversion
+Source: "..\libs\THIRD-PARTY-NOTICES.md"; DestDir: "{app}\libs"; Flags: ignoreversion
+
 ; mkcert para HTTPS local confiable (Chrome/Firefox/Edge sin advertencias).
 Source: "..\mkcert.exe"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -177,13 +185,14 @@ begin
   Result := (ResultCode = 0);
 end;
 
-// Chequeo de dependencias operativas opcionales (LibreOffice, SumatraPDF o
-// PDFtoPrinter): internal/document (Agente C) las usa para imprimir
-// DOCX/PDF pero no vienen empaquetadas con el instalador (son proyectos de
-// terceros con su propio instalador). Si faltan, el servicio arranca igual
-// — solo falla especificamente POST /api/v1/print/document con 503 hasta
-// que se instalen. Chequeo simple de existencia en rutas conocidas +
-// mensaje claro es suficiente para v1: no se descargan ni instalan solas.
+// Chequeo de dependencias operativas opcionales: solo LibreOffice queda
+// afuera del instalador (conversion DOCX/XLSX -> PDF), es un proyecto de
+// terceros con su propio instalador y demasiado grande para empaquetar.
+// SumatraPDF.exe SI viene empaquetado (ver seccion [Files], libs\SumatraPDF.exe)
+// asi que ya no se chequea aca -- /print/document siempre tiene al menos un
+// metodo de impresion de PDF disponible sin instalar nada aparte. Si falta
+// LibreOffice, el servicio arranca igual -- solo falla la conversion de
+// DOCX/XLSX especificamente, con 503, hasta que se instale.
 function FileExistsAtAny(Paths: TArrayOfString): Boolean;
 var
   I: Integer;
@@ -201,26 +210,18 @@ end;
 
 function CheckOptionalDependencies(): String;
 var
-  LibreOfficePaths, SumatraPaths, PDFtoPrinterPaths: TArrayOfString;
-  HasLibreOffice, HasSumatraOrPDFtoPrinter: Boolean;
+  LibreOfficePaths: TArrayOfString;
+  HasLibreOffice: Boolean;
   Missing: String;
 begin
   LibreOfficePaths := ['C:\Program Files\LibreOffice\program\soffice.exe',
                         'C:\Program Files (x86)\LibreOffice\program\soffice.exe'];
-  SumatraPaths := ['C:\Program Files\SumatraPDF\SumatraPDF.exe',
-                    'C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe',
-                    ExpandConstant('{localappdata}\SumatraPDF\SumatraPDF.exe')];
-  PDFtoPrinterPaths := ['C:\Program Files\PDFtoPrinter\PDFtoPrinter.exe',
-                         'C:\Program Files (x86)\PDFtoPrinter\PDFtoPrinter.exe'];
 
   HasLibreOffice := FileExistsAtAny(LibreOfficePaths);
-  HasSumatraOrPDFtoPrinter := FileExistsAtAny(SumatraPaths) or FileExistsAtAny(PDFtoPrinterPaths);
 
   Missing := '';
   if not HasLibreOffice then
     Missing := Missing + '  - LibreOffice (conversion de DOCX/XLSX a PDF)' + #13#10;
-  if not HasSumatraOrPDFtoPrinter then
-    Missing := Missing + '  - SumatraPDF o PDFtoPrinter (impresion de PDF sin dialogo)' + #13#10;
 
   Result := Missing;
 end;
