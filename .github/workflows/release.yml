@@ -1,20 +1,30 @@
-name: Build & Release
+name: Build & Release (arya_escpos_go)
 
 # Compila el binario Windows del servicio (cross-compile desde ubuntu-latest --
-# sin CGO/libusb en el modulo, ver internal/hwadapter/usb.go y
+# sin CGO/libusb en el modulo, ver arya_escpos_go/internal/hwadapter/usb.go y
 # internal/winspool/winspool.go: acceden a las DLLs de Windows via
 # golang.org/x/sys/windows, no via cgo, asi que no hace falta un runner
 # Windows para compilar) y publica una GitHub Release versionada con el
 # instalador adjunto. Arya-Market (repo privado, sibling) sincroniza desde
 # ahi periodicamente hacia updates.aryamarket.app -- ver ese repo,
-# .github/workflows/build.yml, job "publish-arya-printer-installer".
+# .github/workflows/sync-arya-printer.yml.
+#
+# El repo tiene arya_escpos_go/ como subcarpeta (sibling de arya_escpos/, la
+# version Python vieja), no como raiz -- todos los steps corren con
+# working-directory: arya_escpos_go.
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'arya_escpos_go/**'
 
 permissions:
   contents: write
+
+defaults:
+  run:
+    working-directory: arya_escpos_go
 
 jobs:
   release:
