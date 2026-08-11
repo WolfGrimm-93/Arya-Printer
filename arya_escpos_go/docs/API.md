@@ -18,7 +18,7 @@ Sin el header, o con una key invalida: `401 Unauthorized`, cuerpo `{"detail": "m
 
 ## CORS
 
-Solo los origenes listados en `security.allowed_origins` reciben los headers `Access-Control-Allow-*`; cualquier otro origen no los recibe (el navegador bloquea la lectura de la respuesta aunque el servidor sí procese el request). Sin `Origin` header (curl, server-to-server) no aplica. `Access-Control-Allow-Private-Network` nunca se emite. Por defecto `allowed_origins` esta vacio: ningun origen cruzado esta permitido hasta que se configure explicitamente.
+Cualquier origen recibe los headers `Access-Control-Allow-*` (se hace eco del `Origin` recibido, nunca un `*` literal) — no hay whitelist de dominios que mantener. El control de acceso real es el header `X-API-Key`: una página que no conoce la key de esa instalación no puede autenticar sus requests, tenga o no CORS de por medio. Sin `Origin` header (curl, server-to-server) no aplica. `Access-Control-Allow-Private-Network` nunca se emite. Ver `internal/middleware/cors.go` para el razonamiento completo.
 
 ## Formato de error
 
@@ -297,6 +297,6 @@ Snapshot de la configuracion en efecto, en `snake_case`, con **`security.api_key
   "devices": { "auto_reconnect": true, "connection_timeout": 5, "retry_attempts": 3 },
   "printers": { "paper_width": 80 },
   "network_scan": { "enabled": true, "subnets": ["192.168.1.0/24"], "ports": [9100, 9101], "timeout": 2 },
-  "security": { "auth_enabled": true, "allowed_origins": [], "max_upload_bytes": 52428800, "max_image_bytes": 5242880 }
+  "security": { "auth_enabled": true, "max_upload_bytes": 52428800, "max_image_bytes": 5242880 }
 }
 ```

@@ -30,10 +30,16 @@ import (
 const testAPIKey = "test-api-key-e2e-0123456789"
 
 // newE2EServer builds the same handler chain as cmd/aryaprinter/main.go's
-// runServer: apiserver.New(deps, mux), wrapped by BodyLimit -> CORS -> Auth
-// -> Logging -> Recover, then serves it on a real loopback listener via
-// httptest.NewServer. The caller must Close() the returned server (t.Cleanup
-// does it here so callers don't have to remember).
+// buildHandler: apiserver.New(deps, mux), wrapped by BodyLimit -> Auth ->
+// CORS -> Logging -> Recover, then serves it on a real loopback listener via
+// httptest.NewServer. Auth must be applied before CORS (i.e. CORS wraps
+// Auth, so CORS runs first) so an OPTIONS preflight — sent without
+// X-API-Key, browsers never include it in preflight — reaches CORS's 204
+// short-circuit before Auth would otherwise reject it with 401 and no CORS
+// headers; getting this order wrong silently breaks every cross-origin call
+// (see cmd/aryaprinter/main.go's buildHandler for the full explanation of a
+// real bug this exact ordering fixed). The caller must Close() the returned
+// server (t.Cleanup does it here so callers don't have to remember).
 func newE2EServer(t *testing.T, deps apiserver.Deps, authEnabled bool) *httptest.Server {
 	t.Helper()
 
@@ -44,10 +50,10 @@ func newE2EServer(t *testing.T, deps apiserver.Deps, authEnabled bool) *httptest
 
 	var handler http.Handler = mux
 	handler = middleware.BodyLimit(50 * 1024 * 1024)(handler)
-	handler = middleware.CORS(nil)(handler)
 	handler = middleware.Auth(authEnabled, func(candidate string) bool {
 		return candidate == testAPIKey
 	})(handler)
+	handler = middleware.CORS()(handler)
 	handler = middleware.Logging(logger)(handler)
 	handler = middleware.Recover(logger)(handler)
 

@@ -46,8 +46,11 @@ network_scan:
   timeout: 2                # seconds
 
 security:
+  # CORS accepts any origin by design - the X-API-Key check below is the
+  # real access control (a page that doesn't know this install's key can't
+  # call it regardless of origin). No allowed_origins list to maintain per
+  # client domain. See internal/middleware/cors.go for the full reasoning.
   auth_enabled: true         # require X-API-Key on all /api/v1/* routes
   api_key_path: "secrets/apikey.key"  # relative to install dir
-  allowed_origins: ["http://localhost:1420", "http://localhost:47100"]  # 1420 = vite.config.ts strictPort; 47100 = origen real reportado por el navegador en runtime (Tauri dev)
   max_upload_bytes: 52428800 # 50 MB, applies to POST /api/v1/print/document
   max_image_bytes: 5242880   # 5 MB, applies to decoded PrintRequest.header_image

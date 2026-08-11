@@ -54,7 +54,6 @@ network_scan:
 security:
   auth_enabled: true
   api_key_path: "secrets/apikey.key"
-  allowed_origins: []
   max_upload_bytes: 52428800
   max_image_bytes: 5242880
 `)
@@ -81,8 +80,6 @@ server:
 security:
   auth_enabled: false
   api_key_path: "secrets/apikey.key"
-  allowed_origins:
-    - "https://market.example.com"
   max_upload_bytes: 1024
   max_image_bytes: 512
 `)
@@ -97,7 +94,6 @@ security:
 	want.Security = SecurityConfig{
 		AuthEnabled:    false,
 		APIKeyPath:     "secrets/apikey.key",
-		AllowedOrigins: []string{"https://market.example.com"},
 		MaxUploadBytes: 1024,
 		MaxImageBytes:  512,
 	}
@@ -139,8 +135,7 @@ func TestLoad_PartialSecuritySection_KeepsAuthEnabledDefault(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "partial-security.yaml")
 	writeYAML(t, path, `
 security:
-  allowed_origins:
-    - "https://market.example.com"
+  max_upload_bytes: 1024
 `)
 
 	got, err := Load(path)
@@ -154,16 +149,12 @@ security:
 	if got.Security.APIKeyPath != Default().Security.APIKeyPath {
 		t.Errorf("Security.APIKeyPath = %q, want default %q", got.Security.APIKeyPath, Default().Security.APIKeyPath)
 	}
-	if got.Security.MaxUploadBytes != Default().Security.MaxUploadBytes {
-		t.Errorf("Security.MaxUploadBytes = %d, want default %d", got.Security.MaxUploadBytes, Default().Security.MaxUploadBytes)
-	}
 	if got.Security.MaxImageBytes != Default().Security.MaxImageBytes {
 		t.Errorf("Security.MaxImageBytes = %d, want default %d", got.Security.MaxImageBytes, Default().Security.MaxImageBytes)
 	}
 	// The one field actually present in the YAML must still take effect.
-	want := []string{"https://market.example.com"}
-	if !reflect.DeepEqual(got.Security.AllowedOrigins, want) {
-		t.Errorf("Security.AllowedOrigins = %+v, want %+v", got.Security.AllowedOrigins, want)
+	if got.Security.MaxUploadBytes != 1024 {
+		t.Errorf("Security.MaxUploadBytes = %d, want 1024", got.Security.MaxUploadBytes)
 	}
 
 	// Every other section, entirely absent from the YAML, must be untouched.

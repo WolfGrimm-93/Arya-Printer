@@ -64,13 +64,13 @@ type NetworkScanConfig struct {
 }
 
 // SecurityConfig has no Python equivalent — it exists to hold the security
-// fixes baked in from the audit (auth, CORS whitelist, upload limits).
+// fixes baked in from the audit (auth, upload limits). CORS itself has no
+// config here: it accepts any origin, see internal/middleware/cors.go.
 type SecurityConfig struct {
-	AuthEnabled    bool     `yaml:"auth_enabled"`     // default true; API key required on all /api/v1/* routes except none (only GET / and GET /health are exempt, hardcoded, not configurable)
-	APIKeyPath     string   `yaml:"api_key_path"`     // default "secrets/apikey.key", relative to install dir
-	AllowedOrigins []string `yaml:"allowed_origins"`  // CORS whitelist; default empty means no cross-origin requests are allowed until explicitly configured
-	MaxUploadBytes int64    `yaml:"max_upload_bytes"` // default 52428800 (50 MB); applies to POST /api/v1/print/document
-	MaxImageBytes  int64    `yaml:"max_image_bytes"`  // default 5242880 (5 MB); applies to decoded PrintRequest.HeaderImage
+	AuthEnabled    bool   `yaml:"auth_enabled"`     // default true; API key required on all /api/v1/* routes except none (only GET / and GET /health are exempt, hardcoded, not configurable)
+	APIKeyPath     string `yaml:"api_key_path"`     // default "secrets/apikey.key", relative to install dir
+	MaxUploadBytes int64  `yaml:"max_upload_bytes"` // default 52428800 (50 MB); applies to POST /api/v1/print/document
+	MaxImageBytes  int64  `yaml:"max_image_bytes"`  // default 5242880 (5 MB); applies to decoded PrintRequest.HeaderImage
 }
 
 // Default returns a Config populated with the same defaults the Python
@@ -112,7 +112,6 @@ func Default() Config {
 		Security: SecurityConfig{
 			AuthEnabled:    true,
 			APIKeyPath:     "secrets/apikey.key",
-			AllowedOrigins: []string{},
 			MaxUploadBytes: 50 * 1024 * 1024,
 			MaxImageBytes:  5 * 1024 * 1024,
 		},

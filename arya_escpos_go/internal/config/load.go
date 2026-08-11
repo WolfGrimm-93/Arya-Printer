@@ -55,11 +55,10 @@ type rawNetworkScanConfig struct {
 }
 
 type rawSecurityConfig struct {
-	AuthEnabled    *bool     `yaml:"auth_enabled"`
-	APIKeyPath     *string   `yaml:"api_key_path"`
-	AllowedOrigins *[]string `yaml:"allowed_origins"`
-	MaxUploadBytes *int64    `yaml:"max_upload_bytes"`
-	MaxImageBytes  *int64    `yaml:"max_image_bytes"`
+	AuthEnabled    *bool   `yaml:"auth_enabled"`
+	APIKeyPath     *string `yaml:"api_key_path"`
+	MaxUploadBytes *int64  `yaml:"max_upload_bytes"`
+	MaxImageBytes  *int64  `yaml:"max_image_bytes"`
 }
 
 // rawConfig mirrors Config with every section (and every field within each
@@ -206,9 +205,6 @@ func mergeSecurity(dst *SecurityConfig, raw *rawSecurityConfig) {
 	}
 	if raw.APIKeyPath != nil {
 		dst.APIKeyPath = *raw.APIKeyPath
-	}
-	if raw.AllowedOrigins != nil {
-		dst.AllowedOrigins = *raw.AllowedOrigins
 	}
 	if raw.MaxUploadBytes != nil {
 		dst.MaxUploadBytes = *raw.MaxUploadBytes

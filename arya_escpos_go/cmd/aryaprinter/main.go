@@ -216,7 +216,7 @@ func buildHandler(deps apiserver.Deps, cfg config.Config, apiKey string, logger 
 	handler = middleware.Auth(cfg.Security.AuthEnabled, func(candidate string) bool {
 		return auth.Valid(apiKey, candidate)
 	})(handler)
-	handler = middleware.CORS(cfg.Security.AllowedOrigins)(handler)
+	handler = middleware.CORS()(handler)
 	handler = middleware.Logging(logger)(handler)
 	handler = middleware.Recover(logger)(handler)
 	return handler
@@ -263,7 +263,6 @@ func sanitizedConfigView(cfg config.Config) any {
 		},
 		"security": map[string]any{
 			"auth_enabled":     cfg.Security.AuthEnabled,
-			"allowed_origins":  cfg.Security.AllowedOrigins,
 			"max_upload_bytes": cfg.Security.MaxUploadBytes,
 			"max_image_bytes":  cfg.Security.MaxImageBytes,
 			// api_key_path intentionally omitted.
