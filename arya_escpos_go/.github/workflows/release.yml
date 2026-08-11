@@ -1,0 +1,66 @@
+name: Build & Release
+
+# Compila el binario Windows del servicio (cross-compile desde ubuntu-latest --
+# sin CGO/libusb en el modulo, ver internal/hwadapter/usb.go y
+# internal/winspool/winspool.go: acceden a las DLLs de Windows via
+# golang.org/x/sys/windows, no via cgo, asi que no hace falta un runner
+# Windows para compilar) y publica una GitHub Release versionada con el
+# instalador adjunto. Arya-Market (repo privado, sibling) sincroniza desde
+# ahi periodicamente hacia updates.aryamarket.app -- ver ese repo,
+# .github/workflows/build.yml, job "publish-arya-printer-installer".
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, verificar y publicar release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: go vet ./...
+        run: go vet ./...
+
+      - name: go test ./...
+        run: go test ./...
+
+      - name: Fijar version de build (auto-incremental, nunca retrocede)
+        id: version
+        run: |
+          set -e
+          BASE=$(sed -n 's/.*serviceVersion = "\([0-9]*\.[0-9]*\).*/\1/p' internal/apiserver/root.go)
+          VERSION="${BASE}.${{ github.run_number }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version de build: $VERSION"
+
+      - name: Cross-compile para Windows
+        env:
+          CGO_ENABLED: 0
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          set -e
+          go build -ldflags "-X 'aryaescpos/internal/apiserver.serviceVersion=${{ steps.version.outputs.version }}'" -o aryaprinter.exe ./cmd/aryaprinter
+
+      - name: Crear GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -e
+          gh release create "v${VERSION}" aryaprinter.exe \
+            --title "v${VERSION}" \
+            --notes "Build automático desde ${{ github.sha }}." \
+            --latest
