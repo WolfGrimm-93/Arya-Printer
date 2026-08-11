@@ -26,6 +26,15 @@ defaults:
   run:
     working-directory: arya_escpos_go
 
+env:
+  # Todo el modulo es Windows-only a nivel de cmd/aryaprinter (importa
+  # internal/hwadapter e internal/winspool, con build constraints "windows").
+  # Sin esto, go vet/build en un runner Linux fallan con "build constraints
+  # exclude all Go files" apenas tocan esos paquetes -- no es opcional.
+  CGO_ENABLED: 0
+  GOOS: windows
+  GOARCH: amd64
+
 jobs:
   release:
     name: Build, verificar y publicar release
@@ -40,11 +49,15 @@ jobs:
         with:
           go-version: '1.26'
 
-      - name: go vet ./...
+      - name: go vet ./... (cross, GOOS=windows)
         run: go vet ./...
 
-      - name: go test ./...
-        run: go test ./...
+      # go test queda fuera de este workflow a proposito: con GOOS=windows
+      # cross-compila los binarios de test pero el runner Linux no puede
+      # *ejecutarlos* (son PE de Windows). El gate real de tests sigue
+      # siendo scripts/build.ps1 corrido local antes de cada commit (ver
+      # comentario del propio script). go vet arriba es lo que sí puede
+      # correr honestamente en este runner.
 
       - name: Fijar version de build (auto-incremental, nunca retrocede)
         id: version
@@ -56,10 +69,6 @@ jobs:
           echo "Version de build: $VERSION"
 
       - name: Cross-compile para Windows
-        env:
-          CGO_ENABLED: 0
-          GOOS: windows
-          GOARCH: amd64
         run: |
           set -e
           go build -ldflags "-X 'aryaescpos/internal/apiserver.serviceVersion=${{ steps.version.outputs.version }}'" -o aryaprinter.exe ./cmd/aryaprinter
